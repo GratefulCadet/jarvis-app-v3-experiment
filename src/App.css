@@ -1,0 +1,220 @@
+.jarvis-shell {
+  position: relative;
+
+  width: 100vw;
+  height: 100vh;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+  background: transparent;
+
+  transition: background 240ms ease;
+
+  -webkit-app-region: drag;
+}
+
+.core-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.core-outer-ring {
+  width: 220px;
+  height: 220px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid rgba(126, 219, 255, 0.26);
+  border-radius: 50%;
+
+  box-shadow:
+    0 0 28px rgba(61, 181, 235, 0.1),
+    inset 0 0 24px rgba(68, 190, 240, 0.06);
+}
+
+.core-middle-ring {
+  width: 150px;
+  height: 150px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid rgba(126, 219, 255, 0.38);
+  border-radius: 50%;
+
+  box-shadow:
+    inset 0 0 18px rgba(61, 181, 235, 0.08);
+}
+
+.core-energy {
+  width: 72px;
+  height: 72px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(237, 252, 255, 1) 0%,
+      rgba(115, 221, 255, 0.95) 24%,
+      rgba(33, 151, 205, 0.62) 54%,
+      rgba(7, 39, 55, 0.12) 76%
+    );
+
+  box-shadow:
+    0 0 18px rgba(108, 218, 255, 0.72),
+    0 0 46px rgba(52, 172, 225, 0.38),
+    0 0 92px rgba(40, 145, 195, 0.15);
+
+  animation: core-idle 4s ease-in-out infinite;
+}
+
+.core-label {
+  margin: 0;
+  padding-left: 0.45em;
+
+  color: rgba(174, 226, 247, 0.52);
+
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.45em;
+}
+
+@keyframes core-idle {
+  0%,
+  100% {
+    transform: scale(0.97);
+    opacity: 0.84;
+  }
+
+  50% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .core-energy {
+    animation: none;
+  }
+}
+/* PiP 상태에서는 Core 이름을 표시하지 않는다. */
+@media (max-width: 500px) {
+  .core-label {
+    display: none;
+  }
+}
+
+/* PiP는 배경 없이 Core만 표시한다. */
+.pip-mode {
+  background: transparent;
+}
+
+/* Command Center 상태에서는 어두운 시스템 배경을 표시한다. */
+.command-center-mode {
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(20, 55, 74, 0.24) 0%,
+      rgba(7, 12, 18, 0.97) 48%,
+      #030507 100%
+    );
+}
+
+/* 드래그 영역 안에서도 Core 클릭이 가능하도록 제외한다. */
+.core-button {
+  appearance: none;
+
+  display: block;
+
+  margin: 0;
+  padding: 0;
+
+  border: 0;
+  border-radius: 50%;
+
+  background: transparent;
+  cursor: pointer;
+
+  -webkit-app-region: no-drag;
+}
+
+.core-button:focus-visible {
+  outline: 1px solid rgba(126, 219, 255, 0.8);
+  outline-offset: 8px;
+}
+
+.core-display {
+  display: block;
+}
+
+/* Command Center에서 PiP로 돌아가는 임시 버튼 */
+.return-button {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+
+  padding: 9px 13px;
+
+  border: 1px solid rgba(126, 219, 255, 0.26);
+  border-radius: 4px;
+
+  background: rgba(5, 16, 23, 0.72);
+  color: rgba(174, 226, 247, 0.7);
+
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+
+  cursor: pointer;
+
+  -webkit-app-region: no-drag;
+}
+
+.return-button:hover {
+  border-color: rgba(126, 219, 255, 0.5);
+  color: rgba(215, 243, 255, 0.95);
+}
+
+/* PiP에서는 외곽 링을 잡아 창을 이동한다. */
+.pip-mode .core-outer-ring,
+.pip-mode .core-middle-ring {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+/* 중앙 에너지 영역만 클릭 가능하게 분리한다. */
+.core-trigger {
+  appearance: none;
+
+  width: 96px;
+  height: 96px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin: 0;
+  padding: 0;
+
+  border: 0;
+  border-radius: 50%;
+
+  background: transparent;
+  cursor: pointer;
+
+  -webkit-app-region: no-drag;
+}
+
+.core-trigger:focus-visible {
+  outline: 1px solid rgba(126, 219, 255, 0.8);
+  outline-offset: 4px;
+}
