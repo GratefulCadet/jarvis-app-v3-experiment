@@ -1,11 +1,27 @@
-const { contextBridge, ipcRenderer } = require('electron')
+const {
+  contextBridge,
+  ipcRenderer,
+} = require('electron')
 
-contextBridge.exposeInMainWorld('jarvisWindow', {
-  openCommandCenter: () => {
-    ipcRenderer.send('window:open-command-center')
-  },
+contextBridge.exposeInMainWorld(
+  'jarvisWindow',
+  {
+    prepareCommandCenter: () => {
+      return ipcRenderer.invoke(
+        'window:prepare-command-center',
+      )
+    },
 
-  returnToPip: () => {
-    ipcRenderer.send('window:return-to-pip')
+    expandCommandCenter: () => {
+      return ipcRenderer.invoke(
+        'window:expand-command-center',
+      )
+    },
+
+    collapseToPip: () => {
+      return ipcRenderer.invoke(
+        'window:collapse-to-pip',
+      )
+    },
   },
-})
+)

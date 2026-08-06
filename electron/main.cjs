@@ -12,161 +12,154 @@ const PIP_SIZE = {
   height: 280,
 }
 
-const COMMAND_CENTER_SIZE = {
-  width: 1100,
-  height: 700,
-}
+let mainWindow = null
 
-const TRANSITION_DURATION_MS = 420
-
-let mainWindow
 let savedPipBounds = null
-let isAnimating = false
+let commandCenterBounds = null
 
-function easeInOutCubic(progress) {
-  if (progress < 0.5) {
-    return 4 * progress * progress * progress
-  }
-
-  return 1 - Math.pow(-2 * progress + 2, 3) / 2
-}
-
-function interpolate(start, end, progress) {
-  return Math.round(start + (end - start) * progress)
-}
-
-function getCenteredBounds(width, height) {
+function getWorkAreaBounds() {
   const currentBounds = mainWindow.getBounds()
-  const currentDisplay = screen.getDisplayMatching(currentBounds)
-  const { workArea } = currentDisplay
+
+  const currentDisplay =
+    screen.getDisplayMatching(currentBounds)
 
   return {
-    x: Math.round(workArea.x + (workArea.width - width) / 2),
-    y: Math.round(workArea.y + (workArea.height - height) / 2),
-    width,
-    height,
+    ...currentDisplay.workArea,
   }
 }
 
-function animateWindowBounds(targetBounds, duration) {
-  return new Promise((resolve) => {
-    const startBounds = mainWindow.getBounds()
-    const startedAt = Date.now()
+/*
+  PiP → Command Center 전환 준비.
 
-    function updateFrame() {
-      if (!mainWindow || mainWindow.isDestroyed()) {
-        resolve()
-        return
-      }
+  아직 Window 크기는 바꾸지 않는다.
 
-      const elapsed = Date.now() - startedAt
-      const progress = Math.min(elapsed / duration, 1)
-      const easedProgress = easeInOutCubic(progress)
-
-      mainWindow.setBounds({
-        x: interpolate(
-          startBounds.x,
-          targetBounds.x,
-          easedProgress,
-        ),
-        y: interpolate(
-          startBounds.y,
-          targetBounds.y,
-          easedProgress,
-        ),
-        width: interpolate(
-          startBounds.width,
-          targetBounds.width,
-          easedProgress,
-        ),
-        height: interpolate(
-          startBounds.height,
-          targetBounds.height,
-          easedProgress,
-        ),
-      })
-
-      if (progress < 1) {
-        setTimeout(updateFrame, 16)
-        return
-      }
-
-      mainWindow.setBounds(targetBounds)
-      resolve()
-    }
-
-    updateFrame()
-  })
-}
-
-async function openCommandCenter() {
+  여기서는:
+  1. 현재 PiP 위치 저장
+  2. Command Center workArea 계산
+  3. PiP Core가 workArea 중앙에서
+     얼마나 떨어져 있는지 계산
+*/
+function prepareCommandCenter() {
   if (
     !mainWindow ||
-    mainWindow.isDestroyed() ||
-    isAnimating
+    mainWindow.isDestroyed()
   ) {
-    return
+    return null
   }
 
-  isAnimating = true
+  const pipBounds = mainWindow.getBounds()
 
-  // 사용자가 배치한 PiP 위치를 기억한다.
-  savedPipBounds = mainWindow.getBounds()
+  savedPipBounds = {
+    ...pipBounds,
+  }
 
-  const commandCenterBounds = getCenteredBounds(
-    COMMAND_CENTER_SIZE.width,
-    COMMAND_CENTER_SIZE.height,
-  )
+  commandCenterBounds =
+    getWorkAreaBounds()
+
+  const pipCenterX =
+    pipBounds.x +
+    pipBounds.width / 2
+
+  const pipCenterY =
+    pipBounds.y +
+    pipBounds.height / 2
+
+  const commandCenterX =
+    commandCenterBounds.x +
+    commandCenterBounds.width / 2
+
+  const commandCenterY =
+    commandCenterBounds.y +
+    commandCenterBounds.height / 2
+
+  return {
+    offsetX:
+      pipCenterX - commandCenterX,
+
+    offsetY:
+      pipCenterY - commandCenterY,
+  }
+}
+
+/*
+  PiP → Command Center.
+
+  애니메이션하지 않는다.
+
+  Native Window bounds는
+  여기서 딱 한 번만 바뀐다.
+*/
+function expandCommandCenter() {
+  if (
+    !mainWindow ||
+    mainWindow.isDestroyed()
+  ) {
+    return false
+  }
+
+  if (!commandCenterBounds) {
+    commandCenterBounds =
+      getWorkAreaBounds()
+  }
 
   mainWindow.setAlwaysOnTop(false)
-  mainWindow.setResizable(true)
-  mainWindow.setBackgroundColor('#00000000')
-
-  await animateWindowBounds(
-    commandCenterBounds,
-    TRANSITION_DURATION_MS,
-  )
-
-  mainWindow.setBackgroundColor('#030507')
   mainWindow.setResizable(false)
 
-  isAnimating = false
+  mainWindow.setBackgroundColor(
+    '#00000000',
+  )
+
+  mainWindow.setBounds(
+    commandCenterBounds,
+    false,
+  )
+
+  return true
 }
 
-async function returnToPip() {
+/*
+  Command Center → PiP.
+
+  CSS 모션이 이미 PiP 위치까지
+  도착한 뒤 호출된다.
+
+  따라서 Native Window는
+  마지막에 한 번만 크기를 변경한다.
+*/
+function collapseToPip() {
   if (
     !mainWindow ||
-    mainWindow.isDestroyed() ||
-    isAnimating
+    mainWindow.isDestroyed()
   ) {
-    return
+    return false
   }
 
-  isAnimating = true
+  const currentBounds =
+    mainWindow.getBounds()
 
-  const currentBounds = mainWindow.getBounds()
+  const targetBounds =
+    savedPipBounds ?? {
+      x: currentBounds.x,
+      y: currentBounds.y,
+      width: PIP_SIZE.width,
+      height: PIP_SIZE.height,
+    }
 
-  const targetBounds = savedPipBounds ?? {
-    x: currentBounds.x,
-    y: currentBounds.y,
-    width: PIP_SIZE.width,
-    height: PIP_SIZE.height,
-  }
+  mainWindow.setBackgroundColor(
+    '#00000000',
+  )
 
-  mainWindow.setResizable(true)
-
-  // 축소 중 PiP 상태가 되면 뒤가 투명하게 보이도록 미리 전환한다.
-  mainWindow.setBackgroundColor('#00000000')
-
-  await animateWindowBounds(
+  mainWindow.setBounds(
     targetBounds,
-    TRANSITION_DURATION_MS,
+    false,
   )
 
   mainWindow.setResizable(false)
   mainWindow.setAlwaysOnTop(true)
 
-  isAnimating = false
+  commandCenterBounds = null
+
+  return true
 }
 
 function createWindow() {
@@ -175,18 +168,27 @@ function createWindow() {
     height: PIP_SIZE.height,
 
     frame: false,
+
     transparent: true,
     backgroundColor: '#00000000',
 
     alwaysOnTop: true,
+
     resizable: false,
     maximizable: false,
+    fullscreenable: false,
+
     hasShadow: false,
+    skipTaskbar: false,
 
     show: false,
 
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
+      preload: path.join(
+        __dirname,
+        'preload.cjs',
+      ),
+
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -194,39 +196,61 @@ function createWindow() {
 
   if (app.isPackaged) {
     mainWindow.loadFile(
-      path.join(__dirname, '../dist/index.html'),
+      path.join(
+        __dirname,
+        '../dist/index.html',
+      ),
     )
   } else {
-    mainWindow.loadURL('http://localhost:5173')
+    mainWindow.loadURL(
+      'http://localhost:5173',
+    )
   }
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show()
-  })
+  mainWindow.once(
+    'ready-to-show',
+    () => {
+      mainWindow.show()
+    },
+  )
 }
 
 app.whenReady().then(() => {
-  ipcMain.on(
-    'window:open-command-center',
-    openCommandCenter,
+  ipcMain.handle(
+    'window:prepare-command-center',
+    prepareCommandCenter,
   )
 
-  ipcMain.on(
-    'window:return-to-pip',
-    returnToPip,
+  ipcMain.handle(
+    'window:expand-command-center',
+    expandCommandCenter,
+  )
+
+  ipcMain.handle(
+    'window:collapse-to-pip',
+    collapseToPip,
   )
 
   createWindow()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (
+      BrowserWindow
+        .getAllWindows()
+        .length === 0
+    ) {
       createWindow()
     }
   })
 })
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
-})
+app.on(
+  'window-all-closed',
+  () => {
+    if (
+      process.platform !== 'darwin'
+    ) {
+      app.quit()
+    }
+  },
+)

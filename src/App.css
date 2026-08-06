@@ -9,189 +9,167 @@
   justify-content: center;
 
   overflow: hidden;
+
   background: transparent;
 
-  transition: background 240ms ease;
+  -webkit-app-region: no-drag;
 
-  -webkit-app-region: drag;
+  --pip-offset-x: 0px;
+  --pip-offset-y: 0px;
 }
 
-.core-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 24px;
-}
+/* ==================================================
+   Command Center background
+   ================================================== */
 
-.core-outer-ring {
-  width: 220px;
-  height: 220px;
+/*
+  실제 배경 레이어.
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  radial glow는 반투명이지만
+  그 밑에 #030507 solid layer가 있으므로
+  Command Center 내부는 절대 투명하지 않는다.
+*/
+.jarvis-shell::before {
+  content: "";
 
-  border: 1px solid rgba(126, 219, 255, 0.26);
-  border-radius: 50%;
+  position: absolute;
+  inset: 0;
 
-  box-shadow:
-    0 0 28px rgba(61, 181, 235, 0.1),
-    inset 0 0 24px rgba(68, 190, 240, 0.06);
-}
+  z-index: 0;
 
-.core-middle-ring {
-  width: 150px;
-  height: 150px;
+  pointer-events: none;
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border: 1px solid rgba(126, 219, 255, 0.38);
-  border-radius: 50%;
-
-  box-shadow:
-    inset 0 0 18px rgba(61, 181, 235, 0.08);
-}
-
-.core-energy {
-  width: 72px;
-  height: 72px;
-
-  border-radius: 50%;
-
-  background:
-    radial-gradient(
-      circle,
-      rgba(237, 252, 255, 1) 0%,
-      rgba(115, 221, 255, 0.95) 24%,
-      rgba(33, 151, 205, 0.62) 54%,
-      rgba(7, 39, 55, 0.12) 76%
-    );
-
-  box-shadow:
-    0 0 18px rgba(108, 218, 255, 0.72),
-    0 0 46px rgba(52, 172, 225, 0.38),
-    0 0 92px rgba(40, 145, 195, 0.15);
-
-  animation: core-idle 4s ease-in-out infinite;
-}
-
-.core-label {
-  margin: 0;
-  padding-left: 0.45em;
-
-  color: rgba(174, 226, 247, 0.52);
-
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0.45em;
-}
-
-@keyframes core-idle {
-  0%,
-  100% {
-    transform: scale(0.97);
-    opacity: 0.84;
-  }
-
-  50% {
-    transform: scale(1.03);
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .core-energy {
-    animation: none;
-  }
-}
-/* PiP 상태에서는 Core 이름을 표시하지 않는다. */
-@media (max-width: 500px) {
-  .core-label {
-    display: none;
-  }
-}
-
-/* PiP는 배경 없이 Core만 표시한다. */
-.pip-mode {
-  background: transparent;
-}
-
-/* Command Center 상태에서는 어두운 시스템 배경을 표시한다. */
-.command-center-mode {
   background:
     radial-gradient(
       circle at center,
-      rgba(20, 55, 74, 0.24) 0%,
-      rgba(7, 12, 18, 0.97) 48%,
-      #030507 100%
+      rgba(24, 72, 96, 0.30) 0%,
+      rgba(11, 34, 48, 0.18) 36%,
+      rgba(3, 5, 7, 0) 70%
+    ),
+    #030507;
+
+  opacity: 0;
+
+  clip-path:
+    circle(
+      105px at 50% 50%
+    );
+
+  will-change:
+    clip-path,
+    opacity;
+}
+
+/*
+  Command Center 최종 상태.
+
+  150vmax는 workArea 전체를
+  충분히 덮는다.
+*/
+.command-center-mode::before {
+  opacity: 1;
+
+  clip-path:
+    circle(
+      150vmax at 50% 50%
     );
 }
 
-/* 드래그 영역 안에서도 Core 클릭이 가능하도록 제외한다. */
-.core-button {
-  appearance: none;
+/*
+  일반 PiP에서는
+  배경이 완전히 투명하다.
+*/
+.pip-mode::before {
+  opacity: 0;
 
-  display: block;
+  clip-path:
+    circle(
+      105px at 50% 50%
+    );
+}
 
-  margin: 0;
-  padding: 0;
+/* ==================================================
+   Core
+   ================================================== */
 
-  border: 0;
+.core-container {
+  position: relative;
+  z-index: 1;
+
+  display: grid;
+  place-items: center;
+
+  transform-origin:
+    center center;
+
+  will-change: transform;
+}
+
+.core-outer-ring {
+  width: 240px;
+  height: 240px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.26
+    );
+
   border-radius: 50%;
 
-  background: transparent;
-  cursor: pointer;
-
-  -webkit-app-region: no-drag;
+  box-shadow:
+    0 0 28px
+      rgba(
+        61,
+        181,
+        235,
+        0.10
+      ),
+    inset 0 0 24px
+      rgba(
+        68,
+        190,
+        240,
+        0.06
+      );
 }
 
-.core-button:focus-visible {
-  outline: 1px solid rgba(126, 219, 255, 0.8);
-  outline-offset: 8px;
+.core-middle-ring {
+  width: 164px;
+  height: 164px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.38
+    );
+
+  border-radius: 50%;
+
+  box-shadow:
+    inset 0 0 18px
+      rgba(
+        61,
+        181,
+        235,
+        0.08
+      );
 }
 
-.core-display {
-  display: block;
-}
-
-/* Command Center에서 PiP로 돌아가는 임시 버튼 */
-.return-button {
-  position: absolute;
-  top: 24px;
-  right: 24px;
-
-  padding: 9px 13px;
-
-  border: 1px solid rgba(126, 219, 255, 0.26);
-  border-radius: 4px;
-
-  background: rgba(5, 16, 23, 0.72);
-  color: rgba(174, 226, 247, 0.7);
-
-  font-family: inherit;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-
-  cursor: pointer;
-
-  -webkit-app-region: no-drag;
-}
-
-.return-button:hover {
-  border-color: rgba(126, 219, 255, 0.5);
-  color: rgba(215, 243, 255, 0.95);
-}
-
-/* PiP에서는 외곽 링을 잡아 창을 이동한다. */
-.pip-mode .core-outer-ring,
-.pip-mode .core-middle-ring {
-  -webkit-app-region: drag;
-  user-select: none;
-}
-
-/* 중앙 에너지 영역만 클릭 가능하게 분리한다. */
 .core-trigger {
   appearance: none;
 
@@ -209,12 +187,571 @@
   border-radius: 50%;
 
   background: transparent;
+
   cursor: pointer;
 
   -webkit-app-region: no-drag;
 }
 
 .core-trigger:focus-visible {
-  outline: 1px solid rgba(126, 219, 255, 0.8);
+  outline:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.8
+    );
+
   outline-offset: 4px;
+}
+
+.core-energy {
+  width: 78px;
+  height: 78px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(
+        237,
+        252,
+        255,
+        1
+      ) 0%,
+      rgba(
+        115,
+        221,
+        255,
+        0.95
+      ) 24%,
+      rgba(
+        33,
+        151,
+        205,
+        0.62
+      ) 54%,
+      rgba(
+        7,
+        39,
+        55,
+        0.12
+      ) 76%
+    );
+
+  box-shadow:
+    0 0 18px
+      rgba(
+        108,
+        218,
+        255,
+        0.72
+      ),
+    0 0 46px
+      rgba(
+        52,
+        172,
+        225,
+        0.38
+      ),
+    0 0 92px
+      rgba(
+        40,
+        145,
+        195,
+        0.15
+      );
+
+  animation:
+    core-idle
+    4s
+    ease-in-out
+    infinite;
+}
+
+@keyframes core-idle {
+  0%,
+  100% {
+    transform:
+      scale(0.97);
+
+    opacity: 0.84;
+  }
+
+  50% {
+    transform:
+      scale(1.03);
+
+    opacity: 1;
+  }
+}
+
+/* ==================================================
+   JARVIS label
+   ================================================== */
+
+.core-label {
+  position: absolute;
+
+  top:
+    calc(
+      100% + 24px
+    );
+
+  left: 50%;
+
+  margin: 0;
+
+  padding-left: 0.45em;
+
+  transform:
+    translateX(-50%);
+
+  white-space: nowrap;
+
+  color:
+    rgba(
+      174,
+      226,
+      247,
+      0.52
+    );
+
+  font-size: 11px;
+  font-weight: 400;
+
+  letter-spacing: 0.45em;
+}
+
+/* ==================================================
+   PiP
+   ================================================== */
+
+/*
+  Command Center 기준 Core = 240px
+
+  PiP에서는
+  전체 객체를 0.75배 하므로
+  외곽 Core = 180px.
+*/
+.pip-mode .core-container {
+  transform:
+    translate3d(
+      0,
+      0,
+      0
+    )
+    scale(0.75);
+}
+
+/*
+  PiP 외곽 링은
+  Window drag 영역.
+*/
+.pip-mode
+.core-outer-ring,
+.pip-mode
+.core-middle-ring {
+  -webkit-app-region: drag;
+
+  user-select: none;
+}
+
+/* ==================================================
+   Command Center idle
+   ================================================== */
+
+.command-center-mode
+.core-container {
+  transform:
+    translate3d(
+      0,
+      0,
+      0
+    )
+    scale(1);
+}
+
+/* ==================================================
+   OPEN
+   PiP → Command Center
+   ================================================== */
+
+/*
+  아직 Native Window가 PiP일 때.
+
+  Core는 현재 위치 그대로.
+*/
+.pip-mode.opening-start
+.core-container {
+  transform:
+    translate3d(
+      0,
+      0,
+      0
+    )
+    scale(0.75);
+
+  transition: none;
+}
+
+/*
+  Native Window가 workArea로
+  확대된 순간부터 적용.
+
+  workArea의 중앙을 기준으로
+  기존 PiP 위치까지 역이동해서
+  화면상 Core 위치를 그대로 유지한다.
+*/
+@media (min-width: 501px) {
+  .pip-mode.opening-start
+  .core-container {
+    transform:
+      translate3d(
+        var(--pip-offset-x),
+        var(--pip-offset-y),
+        0
+      )
+      scale(0.75);
+
+    transition: none;
+  }
+
+  /*
+    확대된 첫 프레임에서
+    검은 배경도 기존 PiP 위치의
+    작은 원으로 시작한다.
+  */
+  .pip-mode.opening-start::before {
+    opacity: 1;
+
+    clip-path:
+      circle(
+        105px
+        at
+        calc(
+          50% +
+          var(--pip-offset-x)
+        )
+        calc(
+          50% +
+          var(--pip-offset-y)
+        )
+      );
+
+    transition: none;
+  }
+}
+
+/*
+  실제 opening motion.
+
+  Native Window는 이미 고정.
+
+  GPU transform으로:
+  PiP 위치 → 중앙
+  0.75 → 1
+*/
+.pip-mode.opening
+.core-container {
+  transform:
+    translate3d(
+      0,
+      0,
+      0
+    )
+    scale(1);
+
+  transition:
+    transform
+    420ms
+    cubic-bezier(
+      0.22,
+      1,
+      0.36,
+      1
+    );
+}
+
+/*
+  같은 시간 동안
+  배경 원도 PiP에서
+  Command Center 전체로 확장.
+*/
+.pip-mode.opening::before {
+  opacity: 1;
+
+  clip-path:
+    circle(
+      150vmax
+      at
+      50%
+      50%
+    );
+
+  transition:
+    clip-path
+      420ms
+      cubic-bezier(
+        0.22,
+        1,
+        0.36,
+        1
+      ),
+    opacity
+      120ms
+      ease-out;
+}
+
+/* ==================================================
+   CLOSE STEP 1
+   전체 배경 → 중앙 원 응축
+   ================================================== */
+
+.command-center-mode
+.closing-prep {
+  pointer-events: none;
+}
+
+.command-center-mode.closing-prep
+.core-container {
+  transform:
+    translate3d(
+      0,
+      0,
+      0
+    )
+    scale(1);
+
+  transition: none;
+}
+
+/*
+  기존에 마음에 들었던
+  240ms 원형 응축.
+*/
+.command-center-mode.closing-prep::before {
+  opacity: 1;
+
+  clip-path:
+    circle(
+      300px
+      at
+      50%
+      50%
+    );
+
+  transition:
+    clip-path
+      240ms
+      cubic-bezier(
+        0.22,
+        1,
+        0.36,
+        1
+      );
+}
+
+/* ==================================================
+   CLOSE STEP 2
+   중앙 → 실제 PiP 위치
+   ================================================== */
+
+.command-center-mode.closing-moving
+.core-container {
+  transform:
+    translate3d(
+      var(--pip-offset-x),
+      var(--pip-offset-y),
+      0
+    )
+    scale(0.75);
+
+  transition:
+    transform
+      420ms
+      cubic-bezier(
+        0.22,
+        1,
+        0.36,
+        1
+      );
+}
+
+.command-center-mode.closing-moving::before {
+  opacity: 1;
+
+  clip-path:
+    circle(
+      105px
+      at
+      calc(
+        50% +
+        var(--pip-offset-x)
+      )
+      calc(
+        50% +
+        var(--pip-offset-y)
+      )
+    );
+
+  transition:
+    clip-path
+      420ms
+      cubic-bezier(
+        0.22,
+        1,
+        0.36,
+        1
+      );
+}
+
+/* ==================================================
+   CLOSE STEP 3
+   Native bounds swap 직전
+   ================================================== */
+
+.command-center-mode.closing-swap
+.core-container {
+  transform:
+    translate3d(
+      var(--pip-offset-x),
+      var(--pip-offset-y),
+      0
+    )
+    scale(0.75);
+
+  transition: none;
+}
+
+.command-center-mode.closing-swap::before {
+  opacity: 1;
+
+  clip-path:
+    circle(
+      105px
+      at
+      calc(
+        50% +
+        var(--pip-offset-x)
+      )
+      calc(
+        50% +
+        var(--pip-offset-y)
+      )
+    );
+
+  transition: none;
+}
+
+/*
+  Native Window가 280×280으로
+  교체된 직후.
+
+  viewport 중심 자체가 이제
+  실제 PiP 화면 위치이므로
+  translate가 더 이상 필요 없다.
+*/
+@media (max-width: 500px) {
+  .command-center-mode.closing-swap
+  .core-container {
+    transform:
+      translate3d(
+        0,
+        0,
+        0
+      )
+      scale(0.75);
+  }
+
+  .command-center-mode.closing-swap::before {
+    opacity: 1;
+
+    clip-path:
+      circle(
+        105px
+        at
+        50%
+        50%
+      );
+  }
+}
+
+/*
+  React state가 PiP로 변경된 뒤에도
+  같은 화면 상태를 한 프레임 유지.
+*/
+.pip-mode.closing-swap
+.core-container {
+  transform:
+    translate3d(
+      0,
+      0,
+      0
+    )
+    scale(0.75);
+
+  transition: none;
+}
+
+.pip-mode.closing-swap::before {
+  opacity: 1;
+
+  clip-path:
+    circle(
+      105px
+      at
+      50%
+      50%
+    );
+
+  transition: none;
+}
+
+/* ==================================================
+   CLOSE STEP 4
+   PiP background fade
+   ================================================== */
+
+.pip-mode.pip-fade
+.core-container {
+  transform:
+    translate3d(
+      0,
+      0,
+      0
+    )
+    scale(0.75);
+}
+
+.pip-mode.pip-fade::before {
+  opacity: 0;
+
+  clip-path:
+    circle(
+      105px
+      at
+      50%
+      50%
+    );
+
+  transition:
+    opacity
+      160ms
+      ease-out;
+}
+
+/* ==================================================
+   Reduced motion
+   ================================================== */
+
+@media (
+  prefers-reduced-motion:
+  reduce
+) {
+  .core-energy {
+    animation: none;
+  }
 }
