@@ -7,7 +7,7 @@ import './App.css'
 
 const PIP_BREAKPOINT = 500
 
-const OPENING_MS = 420
+const OPENING_MS = 500
 
 const CLOSING_PREP_MS = 240
 const CLOSING_MOVE_MS = 420
