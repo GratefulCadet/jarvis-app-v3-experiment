@@ -105,7 +105,18 @@
   will-change: transform;
 }
 
+/* ==================================================
+   Core shell + orbital presence
+   ================================================== */
+
+
+/* --------------------------------------------------
+   Outer translucent shell
+   -------------------------------------------------- */
+
 .core-outer-ring {
+  position: relative;
+
   width: 240px;
   height: 240px;
 
@@ -113,41 +124,30 @@
   align-items: center;
   justify-content: center;
 
-  border:
-    1px solid
-    rgba(
-      131,
-      223,
-      262,
-      0.90
-    );
-
+  border: 0;
   border-radius: 50%;
 
-  box-shadow:
-    0 0 28px
-      rgba(
-        61,
-        181,
-        235,
-        0.05
-      ),
-    inset 0 0 24px
-      rgba(
-        68,
-        190,
-        240,
-        0.06
-      );
+  box-shadow: none;
+
+  overflow: visible;
+
+  isolation: isolate;
 }
 
-.core-middle-ring {
-  width: 164px;
-  height: 164px;
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/*
+  가장 바깥쪽의 희미한 spherical shell.
+
+  실제 3D sphere는 아니지만
+  edge + 내부 highlight + glow를 겹쳐
+  투명한 구형 외피처럼 보이게 한다.
+*/
+.core-outer-ring::before {
+  content: '';
+
+  position: absolute;
+
+  inset: -3px;
 
   border:
     1px solid
@@ -155,19 +155,325 @@
       126,
       219,
       255,
-      0.65
+      0.20
     );
 
   border-radius: 50%;
 
+  background:
+    radial-gradient(
+      circle at 36% 28%,
+      rgba(185, 239, 255, 0.055) 0%,
+      rgba(79, 195, 247, 0.018) 34%,
+      rgba(79, 195, 247, 0) 68%
+    );
+
   box-shadow:
-    inset 0 0 18px
+    inset 7px 5px 18px
+      rgba(150, 230, 255, 0.025),
+    inset -7px -8px 20px
+      rgba(18, 96, 130, 0.025),
+    0 0 16px
+      rgba(61, 181, 235, 0.025);
+
+  pointer-events: none;
+
+  z-index: -2;
+}
+
+/* --------------------------------------------------
+   Structural middle ring
+   -------------------------------------------------- */
+
+.core-middle-ring {
+  position: relative;
+  z-index: 2;
+
+  width: 164px;
+  height: 164px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /*
+    레이아웃과 drag geometry는 유지하지만
+    정적인 middle circle은 보이지 않는다.
+  */
+  border: 1px solid transparent;
+  border-radius: 50%;
+
+  box-shadow: none;
+}
+
+
+/* --------------------------------------------------
+   Orbit layer
+   -------------------------------------------------- */
+
+.core-orbit-layer {
+  position: absolute;
+
+  left: 50%;
+  top: 50%;
+
+  width: 240px;
+  height: 240px;
+
+  transform:
+    translate3d(
+      -50%,
+      -50%,
+      0
+    );
+
+  transform-style: preserve-3d;
+  perspective: 700px;
+
+  pointer-events: none;
+  user-select: none;
+
+  z-index: 1;
+}
+
+
+/* --------------------------------------------------
+   Shared orbit appearance
+   -------------------------------------------------- */
+
+.core-orbit {
+  position: absolute;
+
+  left: 50%;
+  top: 50%;
+
+  border:
+    1px solid
+    rgba(
+      65,
+      186,
+      232,
+      0.72
+    );
+
+  border-radius: 50%;
+
+  /*
+    1px geometry 자체는 유지.
+
+    두께를 2px로 늘리는 대신
+    아주 좁은 luminous halo를 겹쳐
+    선명도를 높인다.
+  */
+  box-shadow:
+    0 0 1px
       rgba(
-        61,
-        181,
+        170,
         235,
+        255,
+        0.46
+      ),
+    0 0 3px
+      rgba(
+        72,
+        192,
+        238,
+        0.22
+      ),
+    0 0 8px
+      rgba(
+        72,
+        192,
+        238,
+        0.07
+      );
+
+  transform-origin: center center;
+  transform-style: preserve-3d;
+
+  backface-visibility: visible;
+
+  pointer-events: none;
+
+  will-change: transform;
+}
+
+
+/* --------------------------------------------------
+   Outer orbit
+   -------------------------------------------------- */
+
+.core-orbit-a {
+  width: 236px;
+  height: 236px;
+
+  margin-left: -118px;
+  margin-top: -118px;
+
+  animation:
+    jarvis-orbit-a
+    32s
+    linear
+    infinite;
+}
+
+.core-orbit-c {
+  width: 236px;
+  height: 236px;
+
+  margin-left: -118px;
+  margin-top: -118px;
+
+  opacity: 0.82;
+
+  animation:
+    jarvis-orbit-c
+    38s
+    linear
+    infinite;
+}
+
+/* --------------------------------------------------
+   Inner orbit
+   Existing middle-ring size
+   -------------------------------------------------- */
+
+.core-orbit-b {
+  width: 164px;
+  height: 164px;
+
+  margin-left: -82px;
+  margin-top: -82px;
+
+  border-color:
+    rgba(59, 156, 191, 0.483);
+
+  box-shadow:
+    0 0 1px
+      rgba(
+        184,
+        240,
+        255,
+        0.52
+      ),
+    0 0 3px
+      rgba(
+        78,
+        199,
+        243,
+        0.25
+      ),
+    0 0 7px
+      rgba(
+        78,
+        199,
+        243,
         0.08
       );
+
+  animation:
+    jarvis-orbit-b
+    20s
+    linear
+    infinite;
+}
+
+.core-orbit-d {
+  width: 164px;
+  height: 164px;
+
+  margin-left: -82px;
+  margin-top: -82px;
+
+  opacity: 0.76;
+
+  border-color:
+    rgba(78, 199, 243, 0.501);
+
+  animation:
+    jarvis-orbit-d
+    46s
+    linear
+    infinite;
+}
+
+/* --------------------------------------------------
+   Outer orbital motion
+   -------------------------------------------------- */
+
+@keyframes jarvis-orbit-a {
+  0% {
+    transform:
+      rotateZ(15deg)
+      rotateX(67deg)
+      rotateY(0deg);
+  }
+
+  100% {
+    transform:
+      rotateZ(15deg)
+      rotateX(67deg)
+      rotateY(360deg);
+  }
+}
+
+
+/* --------------------------------------------------
+   Inner orbital motion
+   -------------------------------------------------- */
+
+@keyframes jarvis-orbit-b {
+  0% {
+    transform:
+      rotateZ(66deg)
+      rotateY(64deg)
+      rotateX(0deg);
+  }
+
+  100% {
+    transform:
+      rotateZ(66deg)
+      rotateY(64deg)
+      rotateX(-360deg);
+  }
+}
+
+@keyframes jarvis-orbit-c {
+  0% {
+    transform:
+      rotateZ(78deg)
+      rotateY(63deg)
+      rotateX(0deg);
+  }
+
+  100% {
+    transform:
+      rotateZ(78deg)
+      rotateY(63deg)
+      rotateX(360deg);
+  }
+}
+
+@keyframes jarvis-orbit-d {
+  0% {
+    transform:
+      rotateZ(-24deg)
+      rotateX(61deg)
+      rotateY(0deg);
+  }
+
+  100% {
+    transform:
+      rotateZ(-24deg)
+      rotateX(61deg)
+      rotateY(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .core-orbit {
+    animation: none;
+  }
 }
 
 .core-trigger {
@@ -215,48 +521,29 @@
   background:
     radial-gradient(
       circle,
-      rgba(
-        237,
-        252,
-        255,
-        1
-      ) 0%,
-      rgba(
-        115,
-        221,
-        255,
-        0.95
-      ) 24%,
-      rgba(
-        33,
-        151,
-        205,
-        0.62
-      ) 54%,
-      rgba(
-        7,
-        39,
-        55,
-        0.12
-      ) 76%
+      rgba(237, 252, 255, 1) 0%,
+      rgba(115, 221, 255, 0.96) 25%,
+      rgba(33, 151, 205, 0.68) 55%,
+      rgba(33, 151, 205, 0.22) 76%,
+      rgba(33, 151, 205, 0) 100%
     );
 
   box-shadow:
-    0 0 18px
+    0 0 50px
       rgba(
         108,
         218,
         255,
         0.72
       ),
-    0 0 46px
+    0 0 65px
       rgba(
         52,
         172,
         225,
         0.38
       ),
-    0 0 92px
+    0 0 65px
       rgba(
         40,
         145,
@@ -358,6 +645,7 @@
 
   user-select: none;
 }
+
 
 /* ==================================================
    Command Center idle

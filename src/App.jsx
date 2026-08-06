@@ -38,8 +38,16 @@ function CoreGraphic({
   ariaLabel,
 }) {
   return (
-    <div className="core-outer-ring">
-      <div className="core-middle-ring">
+  <div className="core-outer-ring">
+  <div className="core-orbit-layer" aria-hidden="true">
+    <div className="core-orbit core-orbit-a" />
+    <div className="core-orbit core-orbit-c" />
+
+    <div className="core-orbit core-orbit-b" />
+    <div className="core-orbit core-orbit-d" />
+</div>
+
+  <div className="core-middle-ring">
         <button
           type="button"
           className="core-trigger"
