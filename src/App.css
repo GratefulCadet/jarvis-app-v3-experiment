@@ -1032,6 +1032,1976 @@
 }
 
 /* ==================================================
+   Interaction zone
+
+   Core와 Hover UI를 하나의 영역으로 묶는다.
+   Core → Timer로 마우스를 이동해도 hover가 유지된다.
+   ================================================== */
+
+.pip-interaction-zone {
+  position: relative;
+
+  width: 260px;
+  height: 260px;
+
+  display: grid;
+  place-items: center;
+
+  z-index: 4;
+}
+
+/* ==================================================
+   Quick PiP hover layer
+   ================================================== */
+
+.quick-pip {
+  position: absolute;
+  inset: 0;
+
+  z-index: 5;
+
+  color:
+    rgba(
+      190,
+      232,
+      248,
+      0.82
+    );
+
+  pointer-events: none;
+}
+
+/*
+  Quick PiP의 정보 요소는 기본적으로 숨긴다.
+
+  단, Timer가 active/paused이면
+  7-segment Timer만 Ambient 상태에서도
+  계속 보이게 한다.
+*/
+.quick-pip-next-action,
+.quick-pip-current-step,
+.quick-pip-timer {
+  opacity: 0;
+  visibility: hidden;
+
+  transform:
+    translateY(3px)
+    scale(0.985);
+
+  transition:
+    opacity 140ms ease-out,
+    transform 180ms
+      cubic-bezier(
+        0.22,
+        1,
+        0.36,
+        1
+      ),
+    visibility 140ms;
+}
+
+/*
+  Core 주변 interaction zone에 hover하거나,
+  내부 control이 focus된 경우
+  Next Action + Timer + Current Step을 모두 표시.
+*/
+.quick-pip-enabled
+.pip-interaction-zone:hover
+.quick-pip-next-action,
+.quick-pip-enabled
+.pip-interaction-zone:hover
+.quick-pip-timer,
+.quick-pip-enabled
+.pip-interaction-zone:hover
+.quick-pip-current-step,
+.quick-pip-enabled
+.pip-interaction-zone:focus-within
+.quick-pip-next-action,
+.quick-pip-enabled
+.pip-interaction-zone:focus-within
+.quick-pip-timer,
+.quick-pip-enabled
+.pip-interaction-zone:focus-within
+.quick-pip-current-step {
+  opacity: 1;
+  visibility: visible;
+
+  transform:
+    translateY(0)
+    scale(1);
+}
+
+/* --------------------------------------------------
+   Hover Next Action
+   -------------------------------------------------- */
+
+.quick-pip-next-action {
+  position: absolute;
+
+  top: -10px;
+  left: 50%;
+
+  width: 220px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  gap: 2px;
+
+  transform:
+    translateX(-50%)
+    translateY(3px)
+    scale(0.985);
+
+  text-align: center;
+
+  pointer-events: none;
+  user-select: none;
+}
+
+.quick-pip-enabled
+.pip-interaction-zone:hover
+.quick-pip-next-action,
+.quick-pip-enabled
+.pip-interaction-zone:focus-within
+.quick-pip-next-action {
+  transform:
+    translateX(-50%)
+    translateY(0)
+    scale(1);
+}
+
+.quick-pip-kicker {
+  color:
+    rgb(126, 218, 255);
+
+  font-size: 8.5px;
+  font-weight: 500;
+
+  letter-spacing: 0.24em;
+
+  text-shadow:
+    0 1px 1px
+      rgba(
+        0,
+        6,
+        10,
+        0.94
+      ),
+    0 0 2px
+      rgba(
+        0,
+        6,
+        10,
+        0.2
+      );
+}
+
+.quick-pip-action-text {
+  max-width: 220px;
+
+  overflow: hidden;
+
+  color:
+    rgba(
+      218,
+      245,
+      253,
+      0.92
+    );
+
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.2;
+
+  text-overflow: ellipsis;
+  white-space: normal;
+
+  text-shadow:
+    0 1.5px 1.5px
+      rgba(
+        0,
+        6,
+        10,
+        0.96
+      ),
+    0 0 1px
+      rgba(
+        0,
+        6,
+        10,
+        0.96
+      );
+}
+
+.quick-pip-action-text.is-complete {
+  color:
+    rgba(
+      166,
+      222,
+      239,
+      0.48
+    );
+
+  text-decoration:
+    line-through;
+}
+
+/* --------------------------------------------------
+   7-segment Timer
+   -------------------------------------------------- */
+
+.quick-pip-timer {
+  position: absolute;
+
+  /*
+    Core 중심보다 아래,
+    현재 checklist 바로 위에 배치한다.
+
+    Core 자체를 움직이는 것이 아니라
+    Quick PiP 정보층만 이동한다.
+  */
+  left: 50%;
+  bottom: 30px;
+
+  width: 190px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  gap: 4px;
+
+  box-sizing: border-box;
+
+  /*
+    기존의 독립적인 card 느낌을 제거한다.
+  */
+  padding: 0;
+
+  border: 0;
+  border-radius: 0;
+
+  background: transparent;
+
+  box-shadow: none;
+
+  backdrop-filter: none;
+
+  pointer-events: auto;
+
+  /*
+    공통 hover animation의
+    translateY와 함께 중앙 정렬을 유지한다.
+  */
+  transform:
+    translateX(-50%)
+    translateY(3px)
+    scale(0.985);
+
+  -webkit-app-region: no-drag;
+}
+
+
+.quick-pip-enabled
+.pip-interaction-zone:hover
+.quick-pip-timer,
+.quick-pip-enabled
+.pip-interaction-zone:focus-within
+.quick-pip-timer {
+  transform:
+    translateX(-50%)
+    translateY(0)
+    scale(1);
+}
+
+.quick-pip.is-paused
+.quick-pip-timer {
+  opacity: 0.62;
+}
+
+.quick-pip-timer-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  color:
+    rgba(
+      155,
+      230,
+      255,
+      0.68
+    );
+
+  font-size: 6px;
+  font-weight: 500;
+
+  letter-spacing: 0.14em;
+
+  text-shadow:
+    0 1px 2px
+      rgba(
+        0,
+        5,
+        8,
+        0.92
+      );
+
+  user-select: none;
+}
+
+.seven-segment-time {
+  display: flex;
+  align-items: center;
+
+  gap: 3.6px;
+
+  height: 38.4px;
+
+  filter:
+    drop-shadow(
+      0 0 4px
+      rgba(
+        82,
+        203,
+        246,
+        0.28
+      )
+    );
+
+  user-select: none;
+}
+
+.seven-segment-digit {
+  position: relative;
+
+  width: 19.2px;
+  height: 36px;
+
+  display: inline-block;
+}
+
+.seven-segment {
+  position: absolute;
+
+  border-radius: 999px;
+
+  background:
+    rgba(
+      83,
+      184,
+      224,
+      0.02
+    );
+
+  transition:
+    background 90ms linear,
+    box-shadow 90ms linear,
+    opacity 90ms linear;
+}
+
+.seven-segment.is-on {
+  background:
+    rgba(
+      104,
+      161,
+      179,
+      0.82
+    );
+
+  box-shadow:
+    0 0 3px
+      rgba(
+        110,
+        208,
+        239,
+        0.42
+      ),
+    0 0 6px
+      rgba(
+        66,
+        188,
+        235,
+        0.18
+      );
+
+  opacity: 1;
+}
+
+.segment-a,
+.segment-d,
+.segment-g {
+  left: 3.6px;
+
+  width: 12px;
+  height: 3px;
+}
+
+.segment-a {
+  top: 1.2px;
+}
+
+.segment-g {
+  top: 16.5px;
+}
+
+.segment-d {
+  bottom: 1.2px;
+}
+
+.segment-b,
+.segment-c,
+.segment-e,
+.segment-f {
+  width: 3px;
+  height: 12px;
+}
+
+.segment-b {
+  top: 3.6px;
+  right: 1.2px;
+}
+
+.segment-c {
+  right: 1.2px;
+  bottom: 3.6px;
+}
+
+.segment-e {
+  left: 1.2px;
+  bottom: 3.6px;
+}
+
+.segment-f {
+  top: 3.6px;
+  left: 1.2px;
+}
+
+.seven-segment-colon {
+  width: 6px;
+  height: 36px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7.2px;
+}
+
+.seven-segment-colon span {
+  width: 3px;
+  height: 3px;
+
+  border-radius: 50%;
+
+  background:
+    rgba(
+      164,
+      236,
+      255,
+      1
+    );
+
+  box-shadow:
+    0 0 0 1px
+      rgba(
+        0,
+        8,
+        12,
+        0.58
+      ),
+    0 0 4px
+      rgba(
+        89,
+        205,
+        245,
+        0.56
+      );
+}
+
+.quick-pip-duration-select {
+  width: 67px;
+
+  padding:
+    2px 3px;
+
+  border:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.16
+    );
+
+  border-radius: 5px;
+
+  outline: none;
+
+  background:
+    rgba(38, 107, 141, 0.34);
+
+  color:
+    rgba(31, 71, 87, 0.7);
+
+  font-family: inherit;
+  font-size: 10px;
+
+  cursor: pointer;
+
+  -webkit-app-region: no-drag;
+}
+
+.quick-pip-timer-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.quick-pip-mini-button {
+  appearance: none;
+
+  margin: 0;
+  padding:
+    3px 7px;
+
+  border:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.20
+    );
+
+  border-radius: 999px;
+
+  background:
+    rgba(38, 107, 141, 0.34);
+
+
+  color:
+    rgba(31, 71, 87, 0.7);
+
+
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+
+  letter-spacing: 0.10em;
+
+  cursor: pointer;
+
+  -webkit-app-region: no-drag;
+}
+
+.quick-pip-mini-button:hover {
+  border-color:
+    rgba(
+      126,
+      219,
+      255,
+      0.46
+    );
+
+  color:
+    rgba(
+      222,
+      248,
+      255,
+      0.96
+    );
+}
+
+.quick-pip-open-main-hint {
+  color:
+    rgba(
+      174,
+      226,
+      247,
+      0.45
+    );
+
+  font-size: 9px;
+
+  letter-spacing: 0.12em;
+
+  user-select: none;
+}
+
+/* --------------------------------------------------
+   Current executable checklist step
+
+   전체 checklist는 Main에서 관리하고,
+   PiP에서는 첫 번째 미완료 항목 하나만 보여준다.
+   -------------------------------------------------- */
+
+.quick-pip-current-step {
+  position: absolute;
+
+  left: 50%;
+  bottom: -10px;
+
+  width: 226px;
+  min-height: 35px;
+
+  box-sizing: border-box;
+
+  display: grid;
+
+  grid-template-columns:
+    24px
+    minmax(0, 1fr);
+
+  align-items: center;
+
+  gap: 6px;
+
+  padding:
+    5px 8px;
+
+  border:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.11
+    );
+
+  border-radius: 10px;
+
+  background:
+    rgba(46, 93, 112, 0.2);
+
+  backdrop-filter:
+    blur(8px);
+
+  pointer-events: auto;
+
+  transform:
+    translateX(-50%)
+    translateY(3px)
+    scale(0.985);
+
+  -webkit-app-region: no-drag;
+}
+
+.quick-pip-enabled
+.pip-interaction-zone:hover
+.quick-pip-current-step,
+.quick-pip-enabled
+.pip-interaction-zone:focus-within
+.quick-pip-current-step {
+  transform:
+    translateX(-50%)
+    translateY(0)
+    scale(1);
+}
+
+.quick-pip-current-step.is-complete {
+  border-color:
+    rgba(
+      126,
+      219,
+      255,
+      0.17
+    );
+
+  background:
+    rgba(
+      8,
+      32,
+      42,
+      0.54
+    );
+}
+
+.quick-pip-current-step-toggle {
+  appearance: none;
+
+  width: 22px;
+  height: 22px;
+
+  display: grid;
+  place-items: center;
+
+  margin: 0;
+  padding: 0;
+
+  border:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.27
+    );
+
+  border-radius: 6px;
+
+  background:
+    rgba(
+      24,
+      79,
+      99,
+      0.10
+    );
+
+  color:
+    rgba(
+      190,
+      237,
+      252,
+      0.78
+    );
+
+  font-family: inherit;
+  font-size: 12px;
+
+  cursor: pointer;
+
+  -webkit-app-region: no-drag;
+}
+
+.quick-pip-current-step-toggle:hover {
+  border-color:
+    rgba(
+      126,
+      219,
+      255,
+      0.58
+    );
+
+  color:
+    rgba(
+      227,
+      249,
+      255,
+      0.98
+    );
+}
+
+.quick-pip-current-step-toggle:disabled {
+  cursor: default;
+}
+
+.quick-pip-current-step-copy {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 1px;
+}
+
+.quick-pip-current-step-label {
+  color:
+    rgba(
+      149,
+      228,
+      255,
+      0.66
+    );
+
+  font-size: 6px;
+  font-weight: 500;
+
+  letter-spacing: 0.18em;
+
+  text-shadow:
+    0 1px 2px
+      rgba(
+        0,
+        5,
+        8,
+        0.92
+      );
+
+  user-select: none;
+}
+
+.quick-pip-current-step-text {
+  overflow: hidden;
+
+  color:
+    rgba(
+      221,
+      247,
+      254,
+      0.92
+    );
+
+  font-size: 12px;
+  line-height: 1.25;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  text-shadow:
+    0 1px 2px
+      rgba(
+        0,
+        5,
+        8,
+        0.94
+      ),
+    0 0 5px
+      rgba(
+        0,
+        5,
+        8,
+        0.54
+      );
+
+  user-select: none;
+}
+
+.quick-pip-current-step.is-complete
+.quick-pip-current-step-text {
+  color:
+    rgba(
+      169,
+      221,
+      239,
+      0.48
+    );
+
+  text-decoration:
+    line-through;
+}
+
+
+/* ==================================================
+   Command Center spatial interface
+
+   v1은 실제 orbital path motion이 아니라
+   Core 주변에 원근을 가진 floating panel을 배치한다.
+   구조 검증 후 실제 orbit-following motion으로 확장한다.
+   ================================================== */
+
+.command-center-interface {
+  position: absolute;
+  inset: 0;
+
+  z-index: 2;
+
+  overflow: hidden;
+
+  perspective: 1200px;
+  perspective-origin:
+    50% 50%;
+
+  pointer-events: none;
+}
+
+.command-center-orbit-guide {
+  position: absolute;
+
+  left: 50%;
+  top: 50%;
+
+  border:
+    1px solid
+    rgba(
+      83,
+      184,
+      224,
+      0.07
+    );
+
+  border-radius: 50%;
+
+  pointer-events: none;
+}
+
+.command-center-orbit-guide-a {
+  width: 58vw;
+  height: 34vw;
+
+  transform:
+    translate(-50%, -50%)
+    rotateX(68deg)
+    rotateZ(12deg);
+}
+
+.command-center-orbit-guide-b {
+  width: 72vw;
+  height: 42vw;
+
+  transform:
+    translate(-50%, -50%)
+    rotateX(72deg)
+    rotateZ(-24deg);
+}
+
+.command-panel {
+  position: absolute;
+
+  box-sizing: border-box;
+
+  padding:
+    16px 18px;
+
+  border:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.14
+    );
+
+  border-radius: 12px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        13,
+        35,
+        47,
+        0.62
+      ),
+      rgba(
+        3,
+        11,
+        17,
+        0.52
+      )
+    );
+
+  box-shadow:
+    inset 0 0 20px
+      rgba(
+        67,
+        184,
+        228,
+        0.035
+      ),
+    0 18px 40px
+      rgba(
+        0,
+        0,
+        0,
+        0.22
+      );
+
+  backdrop-filter:
+    blur(10px);
+
+  color:
+    rgba(
+      205,
+      239,
+      251,
+      0.84
+    );
+
+  pointer-events: auto;
+
+  transform-style:
+    preserve-3d;
+
+  -webkit-app-region: no-drag;
+}
+
+.command-panel::before {
+  content: '';
+
+  position: absolute;
+  inset: 0;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(
+        126,
+        219,
+        255,
+        0.04
+      ),
+      transparent 40%,
+      rgba(
+        126,
+        219,
+        255,
+        0.025
+      )
+    );
+
+  pointer-events: none;
+}
+
+.command-panel-objective {
+  top: 13vh;
+  left: 6vw;
+
+  width:
+    clamp(
+      240px,
+      22vw,
+      330px
+    );
+
+  transform:
+    rotateY(10deg)
+    rotateX(2deg);
+
+  animation:
+    command-float-a
+    8s
+    ease-in-out
+    infinite;
+}
+
+.command-panel-next-action {
+  left: 9vw;
+  bottom: 14vh;
+
+  width:
+    clamp(
+      280px,
+      27vw,
+      390px
+    );
+
+  transform:
+    rotateY(8deg)
+    rotateX(-2deg);
+
+  animation:
+    command-float-b
+    9.5s
+    ease-in-out
+    infinite;
+}
+
+.command-panel-timer {
+  top: 14vh;
+  right: 7vw;
+
+  width:
+    clamp(
+      250px,
+      23vw,
+      340px
+    );
+
+  transform:
+    rotateY(-10deg)
+    rotateX(2deg);
+
+  animation:
+    command-float-c
+    8.8s
+    ease-in-out
+    infinite;
+}
+
+.command-panel-checklist {
+  right: 7vw;
+  bottom: 10vh;
+
+  width:
+    clamp(
+      300px,
+      30vw,
+      440px
+    );
+
+  max-height: 44vh;
+
+  transform:
+    rotateY(-8deg)
+    rotateX(-2deg);
+
+  animation:
+    command-float-d
+    10.5s
+    ease-in-out
+    infinite;
+}
+
+@keyframes command-float-a {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+
+  50% {
+    translate: 0 -5px;
+  }
+}
+
+@keyframes command-float-b {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+
+  50% {
+    translate: 4px -3px;
+  }
+}
+
+@keyframes command-float-c {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+
+  50% {
+    translate: -3px -5px;
+  }
+}
+
+@keyframes command-float-d {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+
+  50% {
+    translate: -4px -3px;
+  }
+}
+
+.command-panel-eyebrow {
+  color:
+    rgba(
+      126,
+      219,
+      255,
+      0.48
+    );
+
+  font-size: 9px;
+  font-weight: 500;
+
+  letter-spacing: 0.20em;
+}
+
+.command-panel-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+}
+
+.command-panel-meta {
+  margin-top: 10px;
+
+  color:
+    rgba(
+      158,
+      208,
+      228,
+      0.38
+    );
+
+  font-size: 9px;
+  line-height: 1.45;
+
+  letter-spacing: 0.04em;
+}
+
+.command-objective-text {
+  margin-top: 10px;
+
+  color:
+    rgba(
+      220,
+      246,
+      255,
+      0.90
+    );
+
+  font-size:
+    clamp(
+      16px,
+      1.55vw,
+      22px
+    );
+
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.command-next-action-input {
+  width: 100%;
+
+  box-sizing: border-box;
+
+  margin-top: 9px;
+  padding:
+    8px 0
+    6px;
+
+  border: 0;
+  border-bottom:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.16
+    );
+
+  outline: none;
+
+  background: transparent;
+
+  color:
+    rgba(
+      224,
+      248,
+      255,
+      0.92
+    );
+
+  font-family: inherit;
+  font-size:
+    clamp(
+      15px,
+      1.45vw,
+      21px
+    );
+
+  font-weight: 400;
+}
+
+.command-next-action-input:focus {
+  border-bottom-color:
+    rgba(
+      126,
+      219,
+      255,
+      0.48
+    );
+}
+
+.command-next-action-input.is-complete {
+  color:
+    rgba(
+      174,
+      226,
+      247,
+      0.52
+    );
+
+  text-decoration:
+    line-through;
+}
+
+.command-complete-badge,
+.command-status-badge {
+  padding:
+    3px 6px;
+
+  border:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.18
+    );
+
+  border-radius: 999px;
+
+  color:
+    rgba(
+      180,
+      231,
+      249,
+      0.58
+    );
+
+  font-size: 7px;
+  font-weight: 500;
+
+  letter-spacing: 0.12em;
+}
+
+.command-timer-value {
+  margin-top: 12px;
+
+  display: flex;
+  align-items: center;
+
+  min-height: 38.4px;
+}
+
+.command-seven-segment-time {
+  flex-shrink: 0;
+}
+
+.command-auto-extend {
+  margin-top: 2px;
+
+  color:
+    rgba(
+      126,
+      219,
+      255,
+      0.46
+    );
+
+  font-size: 8px;
+
+  letter-spacing: 0.10em;
+}
+
+.command-duration-presets {
+  display: flex;
+  gap: 5px;
+
+  margin-top: 12px;
+}
+
+.command-duration-button,
+.command-action-button {
+  appearance: none;
+
+  border:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.15
+    );
+
+  background:
+    rgba(
+      8,
+      25,
+      34,
+      0.34
+    );
+
+  color:
+    rgba(
+      176,
+      225,
+      244,
+      0.60
+    );
+
+  font-family: inherit;
+
+  cursor: pointer;
+
+  -webkit-app-region: no-drag;
+}
+
+.command-duration-button {
+  min-width: 38px;
+
+  padding:
+    5px 7px;
+
+  border-radius: 7px;
+
+  font-size: 8px;
+}
+
+.command-duration-button.is-selected {
+  border-color:
+    rgba(
+      126,
+      219,
+      255,
+      0.48
+    );
+
+  color:
+    rgba(
+      220,
+      247,
+      255,
+      0.92
+    );
+
+  background:
+    rgba(
+      35,
+      105,
+      132,
+      0.24
+    );
+}
+
+.command-duration-button:disabled {
+  cursor: default;
+  opacity: 0.34;
+}
+
+.command-timer-actions {
+  display: flex;
+  gap: 7px;
+
+  margin-top: 13px;
+}
+
+.command-action-button {
+  padding:
+    7px 12px;
+
+  border-radius: 999px;
+
+  font-size: 8px;
+  font-weight: 500;
+
+  letter-spacing: 0.12em;
+}
+
+.command-action-button.primary {
+  border-color:
+    rgba(
+      126,
+      219,
+      255,
+      0.38
+    );
+
+  color:
+    rgba(
+      220,
+      247,
+      255,
+      0.90
+    );
+}
+
+.command-action-button.subtle {
+  opacity: 0.58;
+}
+
+.command-progress-label {
+  color:
+    rgba(
+      177,
+      225,
+      244,
+      0.54
+    );
+
+  font-size: 9px;
+
+  font-variant-numeric:
+    tabular-nums;
+}
+
+.command-progress-track {
+  height: 2px;
+
+  margin-top: 10px;
+
+  overflow: hidden;
+
+  border-radius: 999px;
+
+  background:
+    rgba(
+      126,
+      219,
+      255,
+      0.08
+    );
+}
+
+.command-progress-fill {
+  height: 100%;
+
+  border-radius: inherit;
+
+  background:
+    rgba(
+      95,
+      201,
+      240,
+      0.72
+    );
+
+  transition:
+    width 180ms ease-out;
+}
+
+.command-checklist-items {
+  max-height: 24vh;
+
+  margin-top: 9px;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  scrollbar-width: none;
+}
+
+.command-checklist-items::-webkit-scrollbar {
+  display: none;
+}
+
+.command-empty-checklist {
+  padding:
+    12px 0;
+
+  color:
+    rgba(
+      157,
+      207,
+      226,
+      0.38
+    );
+
+  font-size: 10px;
+}
+
+.command-check-item {
+  min-height: 34px;
+
+  display: grid;
+
+  grid-template-columns:
+    24px
+    minmax(0, 1fr)
+    22px;
+
+  align-items: center;
+
+  gap: 6px;
+
+  margin-top: 3px;
+  padding:
+    4px 5px;
+
+  border:
+    1px solid
+    transparent;
+
+  border-radius: 8px;
+
+  transition:
+    border-color 140ms ease-out,
+    background 140ms ease-out,
+    opacity 140ms ease-out;
+}
+
+.command-check-item.is-current {
+  border-color:
+    rgba(
+      126,
+      219,
+      255,
+      0.22
+    );
+
+  background:
+    rgba(
+      43,
+      121,
+      151,
+      0.09
+    );
+}
+
+.command-check-item.is-done {
+  opacity: 0.42;
+}
+
+.command-check-toggle,
+.command-check-delete,
+.command-add-step button {
+  appearance: none;
+
+  margin: 0;
+  padding: 0;
+
+  border: 0;
+
+  background: transparent;
+
+  color:
+    rgba(
+      171,
+      224,
+      244,
+      0.62
+    );
+
+  font-family: inherit;
+
+  cursor: pointer;
+
+  -webkit-app-region: no-drag;
+}
+
+.command-check-toggle {
+  width: 22px;
+  height: 22px;
+
+  font-size: 15px;
+}
+
+.command-check-toggle:disabled,
+.command-check-delete:disabled {
+  cursor: default;
+  opacity: 0.30;
+}
+
+.command-check-content {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 1px;
+}
+
+.command-current-label {
+  color:
+    rgba(
+      126,
+      219,
+      255,
+      0.48
+    );
+
+  font-size: 6px;
+  font-weight: 500;
+
+  letter-spacing: 0.18em;
+}
+
+.command-check-text {
+  overflow: hidden;
+
+  color:
+    rgba(
+      205,
+      238,
+      249,
+      0.78
+    );
+
+  font-size: 18px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-check-item.is-done
+.command-check-text {
+  text-decoration:
+    line-through;
+}
+
+.command-check-delete {
+  width: 18px;
+  height: 18px;
+
+  color:
+    rgba(
+      177,
+      224,
+      242,
+      0.28
+    );
+
+  font-size: 13px;
+}
+
+.command-check-delete:hover {
+  color:
+    rgba(
+      221,
+      246,
+      255,
+      0.82
+    );
+}
+
+.command-add-step {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    28px;
+
+  gap: 6px;
+
+  margin-top: 10px;
+}
+
+.command-add-step input {
+  min-width: 0;
+
+  padding:
+    7px 8px;
+
+  border:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.10
+    );
+
+  border-radius: 7px;
+
+  outline: none;
+
+  background:
+    rgba(
+      3,
+      14,
+      20,
+      0.42
+    );
+
+  color:
+    rgba(
+      210,
+      240,
+      250,
+      0.82
+    );
+
+  font-family: inherit;
+  font-size: 15px;
+
+  -webkit-app-region: no-drag;
+}
+
+.command-add-step input:focus {
+  border-color:
+    rgba(
+      126,
+      219,
+      255,
+      0.32
+    );
+}
+
+.command-add-step button {
+  border:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.18
+    );
+
+  border-radius: 7px;
+
+  font-size: 16px;
+}
+
+.command-add-step button:disabled {
+  cursor: default;
+  opacity: 0.24;
+}
+
+/* ==================================================
+   External-world placeholder satellites
+
+   실제 데이터 연동은 하지 않는다.
+   Main의 공간 밀도만 먼저 평가하기 위한 자리다.
+   ================================================== */
+
+.command-external-module {
+  position: absolute;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 3px;
+
+  color:
+    rgba(
+      151,
+      207,
+      228,
+      0.26
+    );
+
+  font-size: 7px;
+
+  letter-spacing: 0.16em;
+
+  pointer-events: none;
+
+  transform-style:
+    preserve-3d;
+}
+
+.command-external-module strong {
+  color:
+    rgba(
+      170,
+      220,
+      239,
+      0.18
+    );
+
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.command-external-weather {
+  left: 35vw;
+  top: 11vh;
+
+  transform:
+    rotateY(18deg)
+    translateZ(-30px);
+}
+
+.command-external-calendar {
+  right: 35vw;
+  top: 10vh;
+
+  text-align: right;
+
+  transform:
+    rotateY(-18deg)
+    translateZ(-30px);
+}
+
+.command-external-news {
+  left: 50%;
+  bottom: 7vh;
+
+  transform:
+    translateX(-50%)
+    rotateX(8deg)
+    translateZ(-40px);
+
+  text-align: center;
+}
+
+/* ==================================================
+   Responsive Command Center
+   ================================================== */
+
+@media (
+  max-width: 1050px
+) {
+  .command-panel-objective {
+    left: 3vw;
+  }
+
+  .command-panel-next-action {
+    left: 4vw;
+  }
+
+  .command-panel-timer {
+    right: 3vw;
+  }
+
+  .command-panel-checklist {
+    right: 3vw;
+  }
+
+  .command-external-module {
+    display: none;
+  }
+}
+
+@media (
+  max-height: 720px
+) {
+  .command-panel-objective {
+    top: 7vh;
+  }
+
+  .command-panel-next-action {
+    bottom: 7vh;
+  }
+
+  .command-panel-timer {
+    top: 7vh;
+  }
+
+  .command-panel-checklist {
+    bottom: 5vh;
+    max-height: 48vh;
+  }
+}
+
+.quick-pip-pause-resume-button {
+  padding:
+    4px 12px;
+
+  border: 1px solid rgba(126, 218, 255, 0.542);
+
+  background: transparent;
+
+  border-radius: 10px;
+
+  box-shadow: none;
+
+  color:
+    rgba(
+      210,
+      243,
+      253,
+      0.88
+    );
+
+  font-size: 12px;
+
+  text-shadow:
+    0 1px 2px
+      rgba(
+        0,
+        6,
+        10,
+        0.94
+      ),
+    0 0 2px
+      rgba(
+        0,
+        6,
+        10,
+        0.54
+      );
+}
+
+/* ==================================================
+   Focus
+   ================================================== */
+
+.quick-pip-mini-button:focus-visible,
+.quick-pip-current-step-toggle:focus-visible,
+.command-duration-button:focus-visible,
+.command-action-button:focus-visible,
+.command-check-toggle:focus-visible,
+.command-check-delete:focus-visible,
+.command-add-step button:focus-visible {
+  outline:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.72
+    );
+
+  outline-offset: 2px;
+}
+
+/* ==================================================
    Reduced motion
    ================================================== */
 
@@ -1039,7 +3009,13 @@
   prefers-reduced-motion:
   reduce
 ) {
-  .core-energy {
+  .core-energy,
+  .core-orbit,
+  .command-panel {
     animation: none;
+  }
+
+  .quick-pip {
+    transition: none;
   }
 }

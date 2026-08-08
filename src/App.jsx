@@ -3,6 +3,10 @@ import {
   useState,
 } from 'react'
 
+import CommandCenter from './CommandCenter'
+import QuickPip from './QuickPip'
+import useExecutionSession from './useExecutionSession'
+
 import './App.css'
 
 const PIP_BREAKPOINT = 500
@@ -38,16 +42,19 @@ function CoreGraphic({
   ariaLabel,
 }) {
   return (
-  <div className="core-outer-ring">
-  <div className="core-orbit-layer" aria-hidden="true">
-    <div className="core-orbit core-orbit-a" />
-    <div className="core-orbit core-orbit-c" />
+    <div className="core-outer-ring">
+      <div
+        className="core-orbit-layer"
+        aria-hidden="true"
+      >
+        <div className="core-orbit core-orbit-a" />
+        <div className="core-orbit core-orbit-c" />
 
-    <div className="core-orbit core-orbit-b" />
-    <div className="core-orbit core-orbit-d" />
-</div>
+        <div className="core-orbit core-orbit-b" />
+        <div className="core-orbit core-orbit-d" />
+      </div>
 
-  <div className="core-middle-ring">
+      <div className="core-middle-ring">
         <button
           type="button"
           className="core-trigger"
@@ -95,6 +102,14 @@ function App() {
     x: 0,
     y: 0,
   })
+
+  /*
+    Quick PiP와 Command Center가
+    동일한 Timer / Checklist / Next Action
+    상태를 공유한다.
+  */
+  const execution =
+    useExecutionSession()
 
   const getWindowApi = () => {
     if (!window.jarvisWindow) {
@@ -168,10 +183,6 @@ function App() {
         return
       }
 
-      /*
-        확대된 viewport가
-        실제로 그려질 시간을 준다.
-      */
       await nextPaint()
 
       /*
@@ -210,7 +221,6 @@ function App() {
 
       /*
         1.
-        기존에 마음에 들었던
         전체 배경 → 중앙 원 응축.
       */
       setPhase(
@@ -253,7 +263,7 @@ function App() {
         Core는 이미 PiP 위치에 있다.
 
         이제 Native Window만
-        280×280으로 딱 한 번 변경.
+        280×280으로 한 번 변경.
       */
       const collapsed =
         await windowApi
@@ -269,9 +279,6 @@ function App() {
       /*
         5.
         실제 React 상태도 PiP로 변경.
-
-        closing-swap CSS가
-        화면상 같은 위치를 유지한다.
       */
       setIsPip(true)
 
@@ -279,8 +286,7 @@ function App() {
 
       /*
         6.
-        PiP 주변에 남아 있는
-        검은 원만 fade-out.
+        PiP 주변의 배경만 fade-out.
       */
       setPhase('pip-fade')
 
@@ -290,6 +296,15 @@ function App() {
       setPhase('idle')
     }
 
+  /*
+    현재 interaction:
+
+    PiP Core click
+    → Command Center
+
+    Command Center Core click
+    → PiP
+  */
   const handleCoreClick = () => {
     if (phase !== 'idle') {
       return
@@ -352,7 +367,17 @@ function App() {
       ? 'pip-mode'
       : 'command-center-mode'
 
+  const quickPipClass =
+    isPip &&
+    phase === 'idle'
+      ? 'quick-pip-enabled'
+      : ''
+
   const showLabel =
+    !isPip &&
+    phase === 'idle'
+
+  const showCommandCenter =
     !isPip &&
     phase === 'idle'
 
@@ -362,6 +387,7 @@ function App() {
         'jarvis-shell',
         modeClass,
         phaseClass,
+        quickPipClass,
       ]
         .filter(Boolean)
         .join(' ')}
@@ -373,27 +399,39 @@ function App() {
           `${pipOffset.y}px`,
       }}
     >
-      <section
-        className="core-container"
-        aria-label="JARVIS Core"
-      >
-        <CoreGraphic
-          onActivate={
-            handleCoreClick
-          }
-          ariaLabel={
-            isPip
-              ? 'Open JARVIS Command Center'
-              : 'Return JARVIS to PiP'
-          }
+      {showCommandCenter && (
+        <CommandCenter
+          execution={execution}
         />
+      )}
 
-        {showLabel && (
-          <p className="core-label">
-            JARVIS
-          </p>
-        )}
-      </section>
+      <div className="pip-interaction-zone">
+        <section
+          className="core-container"
+          aria-label="JARVIS Core"
+        >
+          <CoreGraphic
+            onActivate={
+              handleCoreClick
+            }
+            ariaLabel={
+              isPip
+                ? 'Open JARVIS Command Center'
+                : 'Return JARVIS to PiP'
+            }
+          />
+
+          {showLabel && (
+            <p className="core-label">
+              JARVIS
+            </p>
+          )}
+        </section>
+
+        <QuickPip
+          execution={execution}
+        />
+      </div>
     </main>
   )
 }
