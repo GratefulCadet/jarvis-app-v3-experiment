@@ -142,6 +142,7 @@ export default function QuickPip({
         </span>
       </div>
 
+
       <div
         className="quick-pip-timer"
         aria-label="Focus timer"

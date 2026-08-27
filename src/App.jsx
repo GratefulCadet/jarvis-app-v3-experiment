@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useReducer,
   useState,
 } from 'react'
 
@@ -11,11 +12,267 @@ import './App.css'
 
 const PIP_BREAKPOINT = 500
 
+/*
+  Native Electron transition timings.
+
+  이 값들은 CSS transition과 맞물려 있으므로
+  Anime.js Command Center choreography와 분리해서 유지한다.
+*/
 const OPENING_MS = 500
 
 const CLOSING_PREP_MS = 240
 const CLOSING_MOVE_MS = 420
 const PIP_FADE_MS = 160
+
+/*
+  XState 같은 라이브러리를 아직 도입하지 않고,
+  핵심 아이디어만 가져온 작은 explicit state machine.
+
+  view = 사용자가 현재 어느 major surface에 있는가
+  phase = 그 surface 사이를 이동하는 중이라면 어느 단계인가
+*/
+const VIEW = Object.freeze({
+  PIP: 'pip',
+  COMMAND_CENTER:
+    'command-center',
+})
+
+const PHASE = Object.freeze({
+  IDLE: 'idle',
+  OPENING_START:
+    'opening-start',
+  OPENING: 'opening',
+  CLOSING_PREP:
+    'closing-prep',
+  CLOSING_MOVING:
+    'closing-moving',
+  CLOSING_SWAP:
+    'closing-swap',
+  PIP_FADE: 'pip-fade',
+})
+
+const APP_EVENT = Object.freeze({
+  OPEN_PREPARED:
+    'open-prepared',
+  OPEN_WINDOW_EXPANDED:
+    'open-window-expanded',
+  OPEN_COMPLETE:
+    'open-complete',
+  OPEN_ABORT:
+    'open-abort',
+
+  CLOSE_BEGIN:
+    'close-begin',
+  CLOSE_MOVE:
+    'close-move',
+  CLOSE_SWAP:
+    'close-swap',
+  CLOSE_WINDOW_COLLAPSED:
+    'close-window-collapsed',
+  CLOSE_FADE:
+    'close-fade',
+  CLOSE_COMPLETE:
+    'close-complete',
+  CLOSE_ABORT:
+    'close-abort',
+})
+
+/*
+  dnd-kit의 Sensor abstraction에서 아이디어만 가져온다.
+
+  Mouse / Keyboard가 곧바로 transition 구현을 호출하지 않고
+  먼저 "사용자가 무엇을 의도했는가"로 변환한다.
+
+  미래에는 wheel / gesture / voice가 추가되어도
+  같은 intent로 연결할 수 있다.
+*/
+const APP_INTENT = Object.freeze({
+  OPEN_COMMAND_CENTER:
+    'open-command-center',
+  RETURN_TO_PIP:
+    'return-to-pip',
+})
+
+const createInitialInteraction =
+  () => ({
+    view:
+      window.innerWidth <=
+      PIP_BREAKPOINT
+        ? VIEW.PIP
+        : VIEW.COMMAND_CENTER,
+
+    phase: PHASE.IDLE,
+  })
+
+/*
+  허용된 transition만 표현한다.
+
+  예를 들어 PiP에서 opening 중인 동시에 closing이 되는
+  모순된 상태를 이벤트 하나로 만들 수 없게 한다.
+  현재 규모에서는 XState를 설치하지 않고 이 정도로 충분하다.
+*/
+const interactionReducer = (
+  state,
+  event,
+) => {
+  switch (event.type) {
+    case APP_EVENT.OPEN_PREPARED:
+      if (
+        state.view === VIEW.PIP &&
+        state.phase === PHASE.IDLE
+      ) {
+        return {
+          ...state,
+          phase:
+            PHASE.OPENING_START,
+        }
+      }
+      return state
+
+    case APP_EVENT.OPEN_WINDOW_EXPANDED:
+      if (
+        state.view === VIEW.PIP &&
+        state.phase ===
+          PHASE.OPENING_START
+      ) {
+        return {
+          ...state,
+          phase: PHASE.OPENING,
+        }
+      }
+      return state
+
+    case APP_EVENT.OPEN_COMPLETE:
+      if (
+        state.view === VIEW.PIP &&
+        state.phase ===
+          PHASE.OPENING
+      ) {
+        return {
+          view:
+            VIEW.COMMAND_CENTER,
+          phase: PHASE.IDLE,
+        }
+      }
+      return state
+
+    case APP_EVENT.OPEN_ABORT:
+      if (
+        state.view === VIEW.PIP &&
+        (state.phase ===
+          PHASE.OPENING_START ||
+          state.phase ===
+            PHASE.OPENING)
+      ) {
+        return {
+          ...state,
+          phase: PHASE.IDLE,
+        }
+      }
+      return state
+
+    case APP_EVENT.CLOSE_BEGIN:
+      if (
+        state.view ===
+          VIEW.COMMAND_CENTER &&
+        state.phase === PHASE.IDLE
+      ) {
+        return {
+          ...state,
+          phase:
+            PHASE.CLOSING_PREP,
+        }
+      }
+      return state
+
+    case APP_EVENT.CLOSE_MOVE:
+      if (
+        state.view ===
+          VIEW.COMMAND_CENTER &&
+        state.phase ===
+          PHASE.CLOSING_PREP
+      ) {
+        return {
+          ...state,
+          phase:
+            PHASE.CLOSING_MOVING,
+        }
+      }
+      return state
+
+    case APP_EVENT.CLOSE_SWAP:
+      if (
+        state.view ===
+          VIEW.COMMAND_CENTER &&
+        state.phase ===
+          PHASE.CLOSING_MOVING
+      ) {
+        return {
+          ...state,
+          phase:
+            PHASE.CLOSING_SWAP,
+        }
+      }
+      return state
+
+    case APP_EVENT.CLOSE_WINDOW_COLLAPSED:
+      if (
+        state.view ===
+          VIEW.COMMAND_CENTER &&
+        state.phase ===
+          PHASE.CLOSING_SWAP
+      ) {
+        return {
+          view: VIEW.PIP,
+          phase:
+            PHASE.CLOSING_SWAP,
+        }
+      }
+      return state
+
+    case APP_EVENT.CLOSE_FADE:
+      if (
+        state.view === VIEW.PIP &&
+        state.phase ===
+          PHASE.CLOSING_SWAP
+      ) {
+        return {
+          ...state,
+          phase: PHASE.PIP_FADE,
+        }
+      }
+      return state
+
+    case APP_EVENT.CLOSE_COMPLETE:
+      if (
+        state.view === VIEW.PIP &&
+        state.phase ===
+          PHASE.PIP_FADE
+      ) {
+        return {
+          ...state,
+          phase: PHASE.IDLE,
+        }
+      }
+      return state
+
+    case APP_EVENT.CLOSE_ABORT:
+      if (
+        state.view ===
+          VIEW.COMMAND_CENTER &&
+        state.phase !== PHASE.IDLE
+      ) {
+        return {
+          ...state,
+          phase: PHASE.IDLE,
+        }
+      }
+      return state
+
+    default:
+      return state
+  }
+}
 
 const wait = (duration) =>
   new Promise((resolve) => {
@@ -69,31 +326,20 @@ function CoreGraphic({
 }
 
 function App() {
-  /*
-    Window 크기로 상태를 계속 추론하지 않는다.
-
-    최초 실행 상태만 확인하고,
-    그 이후에는 React state가
-    JARVIS 상태의 기준이 된다.
-  */
-  const [isPip, setIsPip] =
-    useState(
-      () =>
-        window.innerWidth <=
-        PIP_BREAKPOINT,
+  const [interaction, dispatch] =
+    useReducer(
+      interactionReducer,
+      undefined,
+      createInitialInteraction,
     )
 
-  /*
-    idle
-    opening-start
-    opening
-    closing-prep
-    closing-moving
-    closing-swap
-    pip-fade
-  */
-  const [phase, setPhase] =
-    useState('idle')
+  const {
+    view,
+    phase,
+  } = interaction
+
+  const isPip =
+    view === VIEW.PIP
 
   const [
     pipOffset,
@@ -104,9 +350,10 @@ function App() {
   })
 
   /*
-    Quick PiP와 Command Center가
-    동일한 Timer / Checklist / Next Action
-    상태를 공유한다.
+    Persistent execution state와 transient interaction state를 분리한다.
+
+    - execution: Objective / Next Action / Checklist / Timer → 저장 대상
+    - interaction: hover / view transition / animation phase → 저장하지 않음
   */
   const execution =
     useExecutionSession()
@@ -126,8 +373,8 @@ function App() {
   const openCommandCenter =
     async () => {
       if (
-        !isPip ||
-        phase !== 'idle'
+        view !== VIEW.PIP ||
+        phase !== PHASE.IDLE
       ) {
         return
       }
@@ -140,10 +387,15 @@ function App() {
       }
 
       /*
-        1.
-        아직 280×280 PiP인 상태에서
-        기존 PiP 위치와 workArea 사이의
-        상대 좌표를 계산한다.
+        FLIP 관점의 기존 transition을 그대로 보존한다.
+
+        First  : 현재 PiP의 화면상 위치를 측정
+        Last   : workArea 전체에서 Core가 중앙에 놓일 최종 layout
+        Invert : --pip-offset-x/y로 "아직 PiP 위치에 있는 것처럼" 역보정
+        Play   : CSS transform이 offset → 0으로 움직이며 공간을 펼침
+
+        즉 별도 Motion 라이브러리를 넣지 않아도
+        현재 signature transition은 이미 FLIP과 유사한 구조다.
       */
       const geometry =
         await windowApi
@@ -158,56 +410,47 @@ function App() {
         y: geometry.offsetY,
       })
 
-      /*
-        2.
-        PiP 시작 상태를 먼저
-        React/CSS에 준비한다.
-      */
-      setPhase(
-        'opening-start',
-      )
+      dispatch({
+        type:
+          APP_EVENT.OPEN_PREPARED,
+      })
 
       await nextPaint()
 
-      /*
-        3.
-        Native Window를
-        workArea 전체로 딱 한 번 변경.
-      */
       const expanded =
         await windowApi
           .expandCommandCenter()
 
       if (!expanded) {
-        setPhase('idle')
+        dispatch({
+          type:
+            APP_EVENT.OPEN_ABORT,
+        })
         return
       }
 
       await nextPaint()
 
-      /*
-        4.
-        여기서부터 보이는 움직임은
-        전부 CSS GPU transform.
-      */
-      setPhase('opening')
+      dispatch({
+        type:
+          APP_EVENT.OPEN_WINDOW_EXPANDED,
+      })
 
       await nextFrame()
       await wait(OPENING_MS)
 
-      /*
-        5.
-        Command Center 상태 확정.
-      */
-      setIsPip(false)
-      setPhase('idle')
+      dispatch({
+        type:
+          APP_EVENT.OPEN_COMPLETE,
+      })
     }
 
   const returnToPip =
     async () => {
       if (
-        isPip ||
-        phase !== 'idle'
+        view !==
+          VIEW.COMMAND_CENTER ||
+        phase !== PHASE.IDLE
       ) {
         return
       }
@@ -219,109 +462,112 @@ function App() {
         return
       }
 
-      /*
-        1.
-        전체 배경 → 중앙 원 응축.
-      */
-      setPhase(
-        'closing-prep',
-      )
+      dispatch({
+        type:
+          APP_EVENT.CLOSE_BEGIN,
+      })
 
       await nextFrame()
       await wait(
         CLOSING_PREP_MS,
       )
 
-      /*
-        2.
-        Core + 원을
-        실제 PiP 위치까지
-        CSS로 이동/축소.
-      */
-      setPhase(
-        'closing-moving',
-      )
+      dispatch({
+        type:
+          APP_EVENT.CLOSE_MOVE,
+      })
 
       await nextFrame()
       await wait(
         CLOSING_MOVE_MS,
       )
 
-      /*
-        3.
-        Native bounds 교체 직전
-        화면을 완전히 고정한다.
-      */
-      setPhase(
-        'closing-swap',
-      )
+      dispatch({
+        type:
+          APP_EVENT.CLOSE_SWAP,
+      })
 
       await nextPaint()
 
-      /*
-        4.
-        Core는 이미 PiP 위치에 있다.
-
-        이제 Native Window만
-        280×280으로 한 번 변경.
-      */
       const collapsed =
         await windowApi
           .collapseToPip()
 
       if (!collapsed) {
-        setPhase('idle')
+        dispatch({
+          type:
+            APP_EVENT.CLOSE_ABORT,
+        })
         return
       }
 
       await nextPaint()
 
-      /*
-        5.
-        실제 React 상태도 PiP로 변경.
-      */
-      setIsPip(true)
+      dispatch({
+        type:
+          APP_EVENT.CLOSE_WINDOW_COLLAPSED,
+      })
 
       await nextPaint()
 
-      /*
-        6.
-        PiP 주변의 배경만 fade-out.
-      */
-      setPhase('pip-fade')
+      dispatch({
+        type:
+          APP_EVENT.CLOSE_FADE,
+      })
 
       await nextFrame()
       await wait(PIP_FADE_MS)
 
-      setPhase('idle')
+      dispatch({
+        type:
+          APP_EVENT.CLOSE_COMPLETE,
+      })
     }
 
   /*
-    현재 interaction:
+    Input source를 product intent로 한 번 변환한다.
 
-    PiP Core click
-    → Command Center
+    지금은:
+    - Core click → OPEN / RETURN
+    - Escape     → RETURN
 
-    Command Center Core click
-    → PiP
+    나중에 wheel / keyboard shortcut / gesture가 생겨도
+    transition 구현을 복제하지 않고 같은 intent를 요청하면 된다.
   */
-  const handleCoreClick = () => {
-    if (phase !== 'idle') {
+  const requestIntent = (
+    intent,
+  ) => {
+    if (phase !== PHASE.IDLE) {
       return
     }
 
-    if (isPip) {
+    if (
+      intent ===
+        APP_INTENT.OPEN_COMMAND_CENTER &&
+      view === VIEW.PIP
+    ) {
       openCommandCenter()
       return
     }
 
-    returnToPip()
+    if (
+      intent ===
+        APP_INTENT.RETURN_TO_PIP &&
+      view ===
+        VIEW.COMMAND_CENTER
+    ) {
+      returnToPip()
+    }
   }
 
-  /*
-    Command Center에서 ESC
-    → PiP 복귀.
-  */
+  const handleCoreClick = () => {
+    requestIntent(
+      isPip
+        ? APP_INTENT.OPEN_COMMAND_CENTER
+        : APP_INTENT.RETURN_TO_PIP,
+    )
+  }
+
   useEffect(() => {
     const handleKeyDown =
       (event) => {
@@ -333,15 +579,18 @@ function App() {
         }
 
         if (
-          isPip ||
-          phase !== 'idle'
+          view !==
+            VIEW.COMMAND_CENTER ||
+          phase !== PHASE.IDLE
         ) {
           return
         }
 
         event.preventDefault()
 
-        returnToPip()
+        requestIntent(
+          APP_INTENT.RETURN_TO_PIP,
+        )
       }
 
     window.addEventListener(
@@ -355,10 +604,10 @@ function App() {
         handleKeyDown,
       )
     }
-  }, [isPip, phase])
+  }, [view, phase])
 
   const phaseClass =
-    phase === 'idle'
+    phase === PHASE.IDLE
       ? ''
       : phase
 
@@ -369,17 +618,17 @@ function App() {
 
   const quickPipClass =
     isPip &&
-    phase === 'idle'
+    phase === PHASE.IDLE
       ? 'quick-pip-enabled'
       : ''
 
   const showLabel =
     !isPip &&
-    phase === 'idle'
+    phase === PHASE.IDLE
 
   const showCommandCenter =
     !isPip &&
-    phase === 'idle'
+    phase === PHASE.IDLE
 
   return (
     <main
@@ -391,6 +640,8 @@ function App() {
       ]
         .filter(Boolean)
         .join(' ')}
+      data-view={view}
+      data-phase={phase}
       style={{
         '--pip-offset-x':
           `${pipOffset.x}px`,
@@ -428,6 +679,13 @@ function App() {
           )}
         </section>
 
+        {/*
+          Activation Prototype는 의도적으로 연결하지 않는다.
+
+          기존 Next Action과 다른 제품 역할이 명확해진 뒤에만
+          별도 activation flow를 다시 검토한다.
+          현재 Quick PiP / Timer / Current Step 동작을 우선 보존한다.
+        */}
         <QuickPip
           execution={execution}
         />

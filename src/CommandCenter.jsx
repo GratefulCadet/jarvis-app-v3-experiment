@@ -1,6 +1,13 @@
 import {
+  useLayoutEffect,
+  useRef,
   useState,
 } from 'react'
+
+import {
+  createScope,
+  createTimeline,
+} from 'animejs'
 
 import {
   TIMER_PRESETS_MINUTES,
@@ -8,11 +15,243 @@ import {
 
 import SevenSegmentTime from './SevenSegmentTime'
 
+/*
+  Command Center entrance choreography.
+
+  이 값들은 Electron PiP ↔ fullscreen 전환 시간과 분리한다.
+  여기서는 "Command Center가 mount된 뒤 내부 UI가 어떻게 구성되는가"만 다룬다.
+
+  의미 순서:
+  surface  → 공간의 존재
+  context  → 지금 무엇을 하고 있는가
+  action   → 지금 무엇을 해야 하는가
+  support  → 실행을 돕는 도구
+  ambient  → 부가적인 외부-world placeholder
+*/
+const COMMAND_CENTER_MOTION = {
+  panelDurationMs: 520,
+  orbitGuideDurationMs: 760,
+  ambientDurationMs: 440,
+
+  surfaceAtMs: 0,
+  contextAtMs: 90,
+  actionAtMs: 150,
+  timerAtMs: 245,
+  checklistAtMs: 300,
+  ambientAtMs: 360,
+}
+
 export default function CommandCenter({
   execution,
 }) {
+  const rootRef = useRef(null)
+
   const [newItem, setNewItem] =
     useState('')
+
+  /*
+    Anime.js boundary:
+
+    - 일회성 Command Center entrance choreography만 담당한다.
+    - Core orbit / Core breathing / panel idle float는 CSS가 계속 담당한다.
+    - PiP ↔ fullscreen Electron transition은 App.jsx의 기존 phase flow를 유지한다.
+    - 기존 rotateX / rotateY를 덮어쓰지 않도록 CSS custom property만 움직인다.
+
+    createScope는 이 component 내부로 selector를 제한하고,
+    unmount 시 timeline을 한 번에 정리한다.
+  */
+  useLayoutEffect(() => {
+    const scope = createScope({
+      root: rootRef,
+      mediaQueries: {
+        reducedMotion:
+          '(prefers-reduced-motion: reduce)',
+      },
+    }).add((self) => {
+      if (
+        self.matches.reducedMotion
+      ) {
+        return
+      }
+
+      const entrance =
+        createTimeline({
+          autoplay: false,
+          defaults: {
+            duration:
+              COMMAND_CENTER_MOTION
+                .panelDurationMs,
+            ease: 'out(4)',
+          },
+        })
+
+      entrance
+        .label(
+          'surface',
+          COMMAND_CENTER_MOTION
+            .surfaceAtMs,
+        )
+        .label(
+          'context',
+          COMMAND_CENTER_MOTION
+            .contextAtMs,
+        )
+        .label(
+          'action',
+          COMMAND_CENTER_MOTION
+            .actionAtMs,
+        )
+        .label(
+          'timer',
+          COMMAND_CENTER_MOTION
+            .timerAtMs,
+        )
+        .label(
+          'checklist',
+          COMMAND_CENTER_MOTION
+            .checklistAtMs,
+        )
+        .label(
+          'ambient',
+          COMMAND_CENTER_MOTION
+            .ambientAtMs,
+        )
+
+        /*
+          1. 먼저 공간의 궤도 guide가 희미하게 materialize.
+        */
+        .add(
+          '.command-center-orbit-guide',
+          {
+            opacity: [0, 1],
+            duration:
+              COMMAND_CENTER_MOTION
+                .orbitGuideDurationMs,
+            ease: 'out(3)',
+          },
+          'surface',
+        )
+
+        /*
+          2. Context: 현재 Objective.
+          화면 좌측 위에서 Core 쪽으로 약하게 수렴한다.
+        */
+        .add(
+          '.command-panel-objective',
+          {
+            opacity: [0, 1],
+            '--panel-entry-x': [
+              '-24px',
+              '0px',
+            ],
+            '--panel-entry-y': [
+              '-9px',
+              '0px',
+            ],
+            '--panel-entry-scale': [
+              0.965,
+              1,
+            ],
+          },
+          'context',
+        )
+
+        /*
+          3. Action: Next Action.
+          Objective보다 아주 조금 뒤에 등장시켜
+          "맥락 → 실행할 것"의 읽기 순서를 만든다.
+        */
+        .add(
+          '.command-panel-next-action',
+          {
+            opacity: [0, 1],
+            '--panel-entry-x': [
+              '-30px',
+              '0px',
+            ],
+            '--panel-entry-y': [
+              '11px',
+              '0px',
+            ],
+            '--panel-entry-scale': [
+              0.96,
+              1,
+            ],
+          },
+          'action',
+        )
+
+        /*
+          4. Execution support: Timer → Checklist.
+          둘은 같은 support 계층이지만 완전히 동시에 뜨지 않는다.
+        */
+        .add(
+          '.command-panel-timer',
+          {
+            opacity: [0, 1],
+            '--panel-entry-x': [
+              '24px',
+              '0px',
+            ],
+            '--panel-entry-y': [
+              '-9px',
+              '0px',
+            ],
+            '--panel-entry-scale': [
+              0.965,
+              1,
+            ],
+          },
+          'timer',
+        )
+        .add(
+          '.command-panel-checklist',
+          {
+            opacity: [0, 1],
+            '--panel-entry-x': [
+              '30px',
+              '0px',
+            ],
+            '--panel-entry-y': [
+              '11px',
+              '0px',
+            ],
+            '--panel-entry-scale': [
+              0.96,
+              1,
+            ],
+          },
+          'checklist',
+        )
+
+        /*
+          5. External-world placeholder는 가장 늦게.
+          현재 핵심 실행 정보보다 시각적 우선순위를 낮춘다.
+        */
+        .add(
+          '.command-external-module',
+          {
+            opacity: [0, 1],
+            duration:
+              COMMAND_CENTER_MOTION
+                .ambientDurationMs,
+            ease: 'out(3)',
+          },
+          'ambient',
+        )
+
+      /*
+        Timeline child의 from 값을 첫 paint 전에 모두 적용한 뒤 재생한다.
+        delayed child가 잠깐 최종 위치로 보이는 flash를 피하기 위한 단계다.
+      */
+      entrance.init()
+      entrance.play()
+    })
+
+    return () => {
+      scope.revert()
+    }
+  }, [])
 
   const {
     objective,
@@ -34,12 +273,12 @@ export default function CommandCenter({
     )
 
   const durationHours =
-  Math.floor(
-    selectedMinutes / 60,
-  )
+    Math.floor(
+      selectedMinutes / 60,
+    )
 
-const durationMinutesPart =
-  selectedMinutes % 60
+  const durationMinutesPart =
+    selectedMinutes % 60
 
   const addItem = (event) => {
     event.preventDefault()
@@ -63,6 +302,7 @@ const durationMinutesPart =
 
   return (
     <section
+      ref={rootRef}
       className="command-center-interface"
       aria-label="JARVIS Command Center"
     >

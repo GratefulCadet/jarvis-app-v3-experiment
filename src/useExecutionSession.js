@@ -5,6 +5,7 @@ import {
 } from 'react'
 
 const STORAGE_KEY = 'jarvis_execution_session_v1'
+const STORAGE_SCHEMA_VERSION = 1
 
 export const TIMER_PRESETS_MINUTES = [
   5,
@@ -125,6 +126,62 @@ const normalizeLoadedState = (
   }
 }
 
+/*
+  Persistent product state boundary.
+
+  Dexie 같은 DB를 아직 도입할 필요는 없지만,
+  저장 형식은 지금부터 UI/transient state와 분리한다.
+
+  schemaVersion을 둬서 나중에 Project / Task / Memory 구조가
+  추가되어도 기존 prototype 데이터를 안전하게 migrate할 수 있게 한다.
+*/
+const unwrapPersistedState = (
+  parsed,
+) => {
+  if (
+    !parsed ||
+    typeof parsed !== 'object'
+  ) {
+    return null
+  }
+
+  /*
+    새 snapshot envelope.
+  */
+  if (
+    Object.prototype.hasOwnProperty.call(
+      parsed,
+      'schemaVersion',
+    )
+  ) {
+    if (
+      parsed.schemaVersion !==
+        STORAGE_SCHEMA_VERSION ||
+      !parsed.execution ||
+      typeof parsed.execution !==
+        'object'
+    ) {
+      return null
+    }
+
+    return parsed.execution
+  }
+
+  /*
+    기존 jarvis_execution_session_v1의 raw object도 계속 읽는다.
+    한 번 저장되면 새 envelope 형식으로 자연스럽게 올라간다.
+  */
+  return parsed
+}
+
+const createPersistedSnapshot = (
+  state,
+) => ({
+  schemaVersion:
+    STORAGE_SCHEMA_VERSION,
+  execution: state,
+})
+
 const loadInitialState = () => {
   try {
     const raw =
@@ -136,8 +193,18 @@ const loadInitialState = () => {
       return createInitialState()
     }
 
+    const parsed =
+      JSON.parse(raw)
+
+    const persisted =
+      unwrapPersistedState(parsed)
+
+    if (!persisted) {
+      return createInitialState()
+    }
+
     return normalizeLoadedState(
-      JSON.parse(raw),
+      persisted,
     )
   } catch {
     return createInitialState()
@@ -148,7 +215,11 @@ const saveState = (state) => {
   try {
     window.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify(state),
+      JSON.stringify(
+        createPersistedSnapshot(
+          state,
+        ),
+      ),
     )
   } catch {
     // localStorage를 사용할 수 없는
@@ -175,6 +246,66 @@ const getRemainingMs = (
     timer.remainingMs ??
       timer.originalDurationMs,
   )
+}
+
+const resolveExpiredTimerState = (
+  current,
+  currentTime,
+) => {
+  if (
+    current.timer.status !==
+      'active' ||
+    current.timer.targetAt ===
+      null ||
+    current.timer.targetAt >
+      currentTime
+  ) {
+    return current
+  }
+
+  const currentAllChecked =
+    current.checklist.length > 0 &&
+    current.checklist.every(
+      (item) => item.checked,
+    )
+
+  if (currentAllChecked) {
+    return {
+      ...current,
+      timer: {
+        ...current.timer,
+        status: 'done',
+        targetAt: null,
+        remainingMs: 0,
+        endedAt: currentTime,
+      },
+    }
+  }
+
+  const extensionMs =
+    Math.max(
+      60_000,
+      Math.round(
+        current.timer
+          .originalDurationMs *
+          AUTO_EXTEND_RATIO,
+      ),
+    )
+
+  return {
+    ...current,
+    timer: {
+      ...current.timer,
+      status: 'active',
+      startedAt: currentTime,
+      targetAt:
+        currentTime + extensionMs,
+      remainingMs: null,
+      extensionCount:
+        current.timer
+          .extensionCount + 1,
+    },
+  }
 }
 
 export const formatTimer = (
@@ -214,8 +345,12 @@ export default function useExecutionSession() {
   const [state, setState] =
     useState(loadInitialState)
 
+  /*
+    now는 display refresh를 위한 transient clock이다.
+    persistent product state가 아니므로 저장하지 않는다.
+  */
   const [now, setNow] =
-    useState(Date.now())
+    useState(() => Date.now())
 
   useEffect(() => {
     saveState(state)
@@ -230,10 +365,18 @@ export default function useExecutionSession() {
     }
 
     const refresh = () => {
-      setNow(Date.now())
-    }
+      const currentTime =
+        Date.now()
 
-    refresh()
+      setNow(currentTime)
+
+      setState((current) =>
+        resolveExpiredTimerState(
+          current,
+          currentTime,
+        ),
+      )
+    }
 
     const intervalId =
       window.setInterval(
@@ -253,96 +396,6 @@ export default function useExecutionSession() {
     state.checklist.every(
       (item) => item.checked,
     )
-
-  /*
-    Neural Quest 규칙:
-
-    체크리스트가 전부 끝나도
-    active timer는 즉시 종료하지 않는다.
-
-    시간이 0이 되는 순간:
-    - 전부 체크됨 -> done
-    - 남은 항목 있음 -> 자동 연장
-  */
-  useEffect(() => {
-    if (
-      state.timer.status !==
-        'active' ||
-      state.timer.targetAt ===
-        null ||
-      state.timer.targetAt > now
-    ) {
-      return
-    }
-
-    setState((current) => {
-      if (
-        current.timer.status !==
-          'active' ||
-        current.timer.targetAt ===
-          null ||
-        current.timer.targetAt >
-          Date.now()
-      ) {
-        return current
-      }
-
-      const currentAllChecked =
-        current.checklist.length >
-          0 &&
-        current.checklist.every(
-          (item) =>
-            item.checked,
-        )
-
-      if (currentAllChecked) {
-        return {
-          ...current,
-          timer: {
-            ...current.timer,
-            status: 'done',
-            targetAt: null,
-            remainingMs: 0,
-            endedAt: Date.now(),
-          },
-        }
-      }
-
-      const extensionMs =
-        Math.max(
-          60_000,
-          Math.round(
-            current.timer
-              .originalDurationMs *
-              AUTO_EXTEND_RATIO,
-          ),
-        )
-
-      const currentTime =
-        Date.now()
-
-      return {
-        ...current,
-        timer: {
-          ...current.timer,
-          status: 'active',
-          startedAt:
-            currentTime,
-          targetAt:
-            currentTime +
-            extensionMs,
-          remainingMs: null,
-          extensionCount:
-            current.timer
-              .extensionCount + 1,
-        },
-      }
-    })
-  }, [
-    now,
-    state.timer.status,
-    state.timer.targetAt,
-  ])
 
   const remainingMs =
     getRemainingMs(

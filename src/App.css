@@ -1941,6 +1941,14 @@
 .command-panel {
   position: absolute;
 
+  /*
+    Anime.js는 이 세 변수만 일회성으로 변경한다.
+    기존 panel perspective와 CSS idle float animation은 그대로 보존된다.
+  */
+  --panel-entry-x: 0px;
+  --panel-entry-y: 0px;
+  --panel-entry-scale: 1;
+
   box-sizing: border-box;
 
   padding:
@@ -2006,6 +2014,10 @@
   transform-style:
     preserve-3d;
 
+  will-change:
+    transform,
+    opacity;
+
   -webkit-app-region: no-drag;
 }
 
@@ -2050,6 +2062,12 @@
     );
 
   transform:
+    translate3d(
+      var(--panel-entry-x),
+      var(--panel-entry-y),
+      0
+    )
+    scale(var(--panel-entry-scale))
     rotateY(10deg)
     rotateX(2deg);
 
@@ -2072,6 +2090,12 @@
     );
 
   transform:
+    translate3d(
+      var(--panel-entry-x),
+      var(--panel-entry-y),
+      0
+    )
+    scale(var(--panel-entry-scale))
     rotateY(8deg)
     rotateX(-2deg);
 
@@ -2094,6 +2118,12 @@
     );
 
   transform:
+    translate3d(
+      var(--panel-entry-x),
+      var(--panel-entry-y),
+      0
+    )
+    scale(var(--panel-entry-scale))
     rotateY(-10deg)
     rotateX(2deg);
 
@@ -2118,6 +2148,12 @@
   max-height: 44vh;
 
   transform:
+    translate3d(
+      var(--panel-entry-x),
+      var(--panel-entry-y),
+      0
+    )
+    scale(var(--panel-entry-scale))
     rotateY(-8deg)
     rotateX(-2deg);
 
@@ -3019,3 +3055,242 @@
     transition: none;
   }
 }
+
+/* ==================================================
+   Dormant Activation Prototype
+
+   현재 App.jsx에는 연결하지 않는다.
+   Activation과 기존 Next Action의 제품 역할이 구분된 뒤
+   prototype 자체를 재설계할 때만 사용한다.
+   ================================================== */
+
+.activation-prototype {
+  position: absolute;
+  inset: 0;
+
+  z-index: 8;
+
+  display: grid;
+  place-items: center;
+
+  pointer-events: auto;
+
+  -webkit-app-region: no-drag;
+}
+
+.activation-prototype-card {
+  width: 238px;
+  min-height: 214px;
+
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  gap: 12px;
+
+  padding:
+    18px
+    16px
+    13px;
+
+  border:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.18
+    );
+
+  border-radius: 15px;
+
+  background:
+    linear-gradient(
+      155deg,
+      rgba(
+        8,
+        29,
+        39,
+        0.94
+      ),
+      rgba(
+        2,
+        9,
+        14,
+        0.96
+      )
+    );
+
+  box-shadow:
+    0 18px 36px
+      rgba(
+        0,
+        0,
+        0,
+        0.34
+      ),
+    inset 0 0 20px
+      rgba(
+        67,
+        184,
+        228,
+        0.035
+      );
+
+  backdrop-filter:
+    blur(10px);
+}
+
+.activation-prototype-block {
+  display: flex;
+  flex-direction: column;
+
+  gap: 5px;
+
+  text-align: left;
+}
+
+.activation-prototype-context {
+  color:
+    rgba(
+      126,
+      219,
+      255,
+      0.46
+    );
+
+  font-size: 7px;
+  font-weight: 500;
+
+  letter-spacing: 0.18em;
+}
+
+.activation-prototype-title,
+.activation-prototype-next-action {
+  color:
+    rgba(
+      224,
+      248,
+      255,
+      0.92
+    );
+
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.activation-prototype-next-action {
+  color:
+    rgba(
+      231,
+      250,
+      255,
+      0.98
+    );
+
+  font-size: 15px;
+}
+
+.activation-prototype-divider {
+  height: 1px;
+
+  background:
+    rgba(
+      126,
+      219,
+      255,
+      0.10
+    );
+}
+
+.activation-prototype-next {
+  appearance: none;
+
+  width: 100%;
+
+  margin: 4px 0 0;
+  padding:
+    8px
+    12px;
+
+  border:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.40
+    );
+
+  border-radius: 999px;
+
+  background:
+    rgba(
+      35,
+      105,
+      132,
+      0.24
+    );
+
+  color:
+    rgba(
+      228,
+      249,
+      255,
+      0.96
+    );
+
+  font-family: inherit;
+  font-size: 10px;
+
+  cursor: pointer;
+
+  -webkit-app-region: no-drag;
+}
+
+.activation-prototype-exit {
+  appearance: none;
+
+  align-self: center;
+
+  margin: -2px 0 0;
+  padding: 3px 8px;
+
+  border: 0;
+
+  background: transparent;
+
+  color:
+    rgba(
+      174,
+      226,
+      247,
+      0.36
+    );
+
+  font-family: inherit;
+  font-size: 8px;
+
+  cursor: pointer;
+
+  -webkit-app-region: no-drag;
+}
+
+.activation-prototype-next:focus-visible,
+.activation-prototype-exit:focus-visible {
+  outline:
+    1px solid
+    rgba(
+      126,
+      219,
+      255,
+      0.72
+    );
+
+  outline-offset: 2px;
+}
+
+
