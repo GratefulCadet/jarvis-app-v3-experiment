@@ -5,6 +5,7 @@ import {
 } from 'react'
 
 import CommandCenter from './CommandCenter'
+import TreePrototype from './TreePrototype'
 import QuickPip from './QuickPip'
 import useExecutionSession from './useExecutionSession'
 
@@ -91,6 +92,17 @@ const APP_INTENT = Object.freeze({
     'open-command-center',
   RETURN_TO_PIP:
     'return-to-pip',
+})
+
+/*
+  Fullscreen 내부 navigation은 Electron/native view와 분리한다.
+
+  VIEW는 PiP ↔ fullscreen window state만 담당하고,
+  FULLSCREEN_SURFACE는 fullscreen 안에서 무엇을 보고 있는지만 담당한다.
+*/
+const FULLSCREEN_SURFACE = Object.freeze({
+  SYSTEM: 'system',
+  EXECUTION: 'execution',
 })
 
 const createInitialInteraction =
@@ -348,6 +360,18 @@ function App() {
     x: 0,
     y: 0,
   })
+
+  const [
+    fullscreenSurface,
+    setFullscreenSurface,
+  ] = useState(
+    FULLSCREEN_SURFACE.SYSTEM,
+  )
+
+  const [
+    executionContext,
+    setExecutionContext,
+  ] = useState(null)
 
   /*
     Persistent execution state와 transient interaction state를 분리한다.
@@ -622,13 +646,21 @@ function App() {
       ? 'quick-pip-enabled'
       : ''
 
-  const showLabel =
+  const showLabel = false
+
+  const showFullscreenSurface =
     !isPip &&
     phase === PHASE.IDLE
 
   const showCommandCenter =
-    !isPip &&
-    phase === PHASE.IDLE
+    showFullscreenSurface &&
+    fullscreenSurface ===
+      FULLSCREEN_SURFACE.EXECUTION
+
+  const showTreePrototype =
+    showFullscreenSurface &&
+    fullscreenSurface ===
+      FULLSCREEN_SURFACE.SYSTEM
 
   return (
     <main
@@ -642,6 +674,9 @@ function App() {
         .join(' ')}
       data-view={view}
       data-phase={phase}
+      data-fullscreen-surface={
+        fullscreenSurface
+      }
       style={{
         '--pip-offset-x':
           `${pipOffset.x}px`,
@@ -653,7 +688,77 @@ function App() {
       {showCommandCenter && (
         <CommandCenter
           execution={execution}
+          executionContext={
+            executionContext
+          }
         />
+      )}
+
+      {showTreePrototype && (
+        <TreePrototype
+          onOpenExecution={(
+            context,
+          ) => {
+            if (context) {
+              setExecutionContext(
+                context,
+              )
+            }
+
+            setFullscreenSurface(
+              FULLSCREEN_SURFACE.EXECUTION,
+            )
+          }}
+        />
+      )}
+
+      {showFullscreenSurface && (
+        <nav
+          className={[
+            'fullscreen-prototype-switch',
+            fullscreenSurface ===
+            FULLSCREEN_SURFACE.EXECUTION
+              ? 'is-execution-dock'
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-label="Prototype fullscreen surface"
+        >
+          <button
+            type="button"
+            className={
+              fullscreenSurface ===
+              FULLSCREEN_SURFACE.SYSTEM
+                ? 'is-active'
+                : ''
+            }
+            onClick={() =>
+              setFullscreenSurface(
+                FULLSCREEN_SURFACE.SYSTEM,
+              )
+            }
+          >
+            SYSTEM
+          </button>
+
+          <button
+            type="button"
+            className={
+              fullscreenSurface ===
+              FULLSCREEN_SURFACE.EXECUTION
+                ? 'is-active'
+                : ''
+            }
+            onClick={() =>
+              setFullscreenSurface(
+                FULLSCREEN_SURFACE.EXECUTION,
+              )
+            }
+          >
+            EXECUTION
+          </button>
+        </nav>
       )}
 
       <div className="pip-interaction-zone">

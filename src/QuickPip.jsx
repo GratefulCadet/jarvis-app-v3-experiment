@@ -5,6 +5,11 @@ import {
 } from 'react'
 
 import {
+  AnimatePresence,
+  motion,
+} from 'motion/react'
+
+import {
   TIMER_PRESETS_MINUTES,
 } from './useExecutionSession'
 
@@ -27,6 +32,11 @@ export default function QuickPip({
     setCompletedFeedback,
   ] = useState(null)
 
+  const [
+    ambientIndex,
+    setAmbientIndex,
+  ] = useState(0)
+
   const feedbackTimerRef =
     useRef(null)
 
@@ -39,6 +49,25 @@ export default function QuickPip({
           feedbackTimerRef.current,
         )
       }
+    }
+  }, [])
+
+  useEffect(() => {
+    const intervalId =
+      window.setInterval(
+        () => {
+          setAmbientIndex(
+            (index) =>
+              (index + 1) % 4,
+          )
+        },
+        2600,
+      )
+
+    return () => {
+      window.clearInterval(
+        intervalId,
+      )
     }
   }, [])
 
@@ -115,12 +144,79 @@ export default function QuickPip({
       completedFeedback,
     ) || !currentItem
 
+  const ambientItems = [
+    {
+      label: 'WEATHER',
+      text: 'Clear focus window',
+    },
+    {
+      label: 'EXECUTION',
+      text: `${visibleStepText} · ${timerText}`,
+    },
+    {
+      label: 'NOTE',
+      text: 'Keep the next move small',
+    },
+    {
+      label: 'TODAY',
+      text: 'Review priority after this run',
+    },
+  ]
+
+  const ambientItem =
+    ambientItems[
+      ambientIndex %
+        ambientItems.length
+    ]
+
   return (
     <aside
       className="quick-pip"
       aria-label="JARVIS quick interaction"
     >
       <div className="quick-pip-next-action">
+        <div className="quick-pip-text-loop">
+          <span className="quick-pip-text-loop-label">
+            {ambientItem.label}
+          </span>
+
+          <AnimatePresence
+            initial={false}
+            mode="wait"
+          >
+            <motion.span
+              key={`${ambientItem.label}-${ambientItem.text}`}
+              className="quick-pip-text-loop-value"
+              initial={{
+                opacity: 0,
+                y: 6,
+                filter: 'blur(3px)',
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                filter: 'blur(0px)',
+              }}
+              exit={{
+                opacity: 0,
+                y: -5,
+                filter: 'blur(3px)',
+              }}
+              transition={{
+                duration: 0.24,
+                ease: [
+                  0.22,
+                  1,
+                  0.36,
+                  1,
+                ],
+              }}
+            >
+              {ambientItem.text}
+            </motion.span>
+          </AnimatePresence>
+        </div>
+
         <span className="quick-pip-kicker">
           {actionComplete
             ? 'NEXT ACTION : COMPLETE'
@@ -204,7 +300,11 @@ export default function QuickPip({
               className="quick-pip-mini-button"
               onClick={actions.start}
             >
-              START
+              <motion.span
+                layout
+              >
+                START
+              </motion.span>
             </button>
           )}
 
@@ -215,7 +315,11 @@ export default function QuickPip({
               className="quick-pip-mini-button quick-pip-pause-resume-button"
               onClick={actions.pause}
             >
-              PAUSE
+              <motion.span
+                layout
+              >
+                PAUSE
+              </motion.span>
             </button>
           )}
 
@@ -226,7 +330,11 @@ export default function QuickPip({
               className="quick-pip-mini-button quick-pip-pause-resume-button"
               onClick={actions.resume}
             >
-              RESUME
+              <motion.span
+                layout
+              >
+                RESUME
+              </motion.span>
             </button>
           )}
 

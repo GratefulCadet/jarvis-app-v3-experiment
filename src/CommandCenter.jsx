@@ -10,6 +10,26 @@ import {
 } from 'animejs'
 
 import {
+  motion,
+} from 'motion/react'
+
+import {
+  Check,
+  ChevronRight,
+  Circle,
+  ListChecks,
+  Pause,
+  Play,
+  Plus,
+  RotateCcw,
+  Square,
+  Target,
+  Timer,
+  X,
+  Zap,
+} from 'lucide-react'
+
+import {
   TIMER_PRESETS_MINUTES,
 } from './useExecutionSession'
 
@@ -41,8 +61,13 @@ const COMMAND_CENTER_MOTION = {
   ambientAtMs: 360,
 }
 
+const MICRO_TAP = {
+  scale: 0.97,
+}
+
 export default function CommandCenter({
   execution,
+  executionContext,
 }) {
   const rootRef = useRef(null)
 
@@ -300,416 +325,655 @@ export default function CommandCenter({
   const timerLocked =
     timer.status !== 'idle'
 
+  const statusTone =
+    timer.status === 'active'
+      ? 'is-live'
+      : timer.status === 'paused'
+        ? 'is-paused'
+        : ''
+
+  const executionPath =
+    executionContext?.path
+      ?.map(
+        (pathNode) =>
+          pathNode.label,
+      )
+      .join(' / ')
+
+  /*
+    Motion Primitives의 Spotlight 아이디어를 JARVIS 구조에 맞게
+    가볍게 재구현한다.
+
+    React state를 갱신하지 않고 CSS custom property만 변경하므로
+    pointer movement가 execution state / timer render와 섞이지 않는다.
+  */
+  const updateSurfaceLight = (event) => {
+    const rect =
+      event.currentTarget.getBoundingClientRect()
+
+    event.currentTarget.style.setProperty(
+      '--surface-light-x',
+      `${event.clientX - rect.left}px`,
+    )
+
+    event.currentTarget.style.setProperty(
+      '--surface-light-y',
+      `${event.clientY - rect.top}px`,
+    )
+
+    event.currentTarget.style.setProperty(
+      '--surface-light-opacity',
+      '1',
+    )
+  }
+
+  const hideSurfaceLight = (event) => {
+    event.currentTarget.style.setProperty(
+      '--surface-light-opacity',
+      '0',
+    )
+  }
+
   return (
     <section
       ref={rootRef}
-      className="command-center-interface"
+      className="command-center-interface antialiased"
       aria-label="JARVIS Command Center"
     >
       <div className="command-center-orbit-guide command-center-orbit-guide-a" />
       <div className="command-center-orbit-guide command-center-orbit-guide-b" />
 
-      <article className="command-panel command-panel-objective">
-        <div className="command-panel-eyebrow">
-          CURRENT OBJECTIVE
-        </div>
+      <div
+        className="command-center-axis command-center-axis-horizontal"
+        aria-hidden="true"
+      />
+      <div
+        className="command-center-axis command-center-axis-vertical"
+        aria-hidden="true"
+      />
 
-        <div className="command-objective-text">
-          {objective}
-        </div>
+      <div className="command-workspace">
+        <article
+          className="command-panel command-panel-objective"
+          onPointerMove={updateSurfaceLight}
+          onPointerEnter={updateSurfaceLight}
+          onPointerLeave={hideSurfaceLight}
+        >
+          <div className="command-context-left min-w-0">
+            <Target
+              className="command-section-icon"
+              aria-hidden="true"
+              size={15}
+              strokeWidth={1.8}
+            />
 
-        <div className="command-panel-meta">
-          EXECUTION LAYER
-        </div>
-      </article>
+            <div>
+              <div className="command-panel-eyebrow">
+                Objective
+              </div>
 
-      <article className="command-panel command-panel-next-action">
-        <div className="command-panel-heading-row">
-          <div className="command-panel-eyebrow">
-            NEXT ACTION
+              <div className="command-objective-text">
+                {executionContext?.node
+                  ?.label || objective}
+              </div>
+
+              {executionPath && (
+                <div className="command-objective-path">
+                  {executionPath}
+                </div>
+              )}
+            </div>
           </div>
 
-          {actionComplete && (
-            <div className="command-complete-badge">
-              COMPLETE
+          <div className="command-context-right shrink-0">
+            <div
+              className={[
+                'command-status-badge',
+                statusTone,
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              <Zap
+                size={11}
+                strokeWidth={2}
+                aria-hidden="true"
+              />
+              {statusLabel}
             </div>
-          )}
-        </div>
 
-        <input
-          type="text"
+            <div className="command-panel-meta">
+              {executionContext?.node
+                ?.type
+                ? `${executionContext.node.type} layer`
+                : 'Execution Layer'}
+            </div>
+          </div>
+        </article>
+
+        <article
           className={[
-            'command-next-action-input',
-            actionComplete
-              ? 'is-complete'
+            'command-panel',
+            'command-panel-next-action',
+            timer.status === 'active'
+              ? 'is-executing'
+              : '',
+            timer.status === 'paused'
+              ? 'is-paused'
               : '',
           ]
             .filter(Boolean)
             .join(' ')}
-          value={nextAction}
-          placeholder="Continue JARVIS prototype"
-          onChange={(event) =>
-            actions.setNextAction(
-              event.target.value,
-            )
-          }
-        />
+          onPointerMove={updateSurfaceLight}
+          onPointerEnter={updateSurfaceLight}
+          onPointerLeave={hideSurfaceLight}
+        >
+          <div className="command-action-header">
+            <div className="command-panel-eyebrow">
+              Current Action
+            </div>
 
-        <div className="command-panel-meta">
-          {actionComplete
-            ? 'All current steps are cleared. Timer continues until time up.'
-            : 'The first unchecked step is the current executable action.'}
-        </div>
-      </article>
-
-      <article className="command-panel command-panel-timer">
-        <div className="command-panel-heading-row">
-          <div className="command-panel-eyebrow">
-            TIMER
+            {actionComplete && (
+              <div className="command-complete-badge">
+                <Check
+                  size={11}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                />
+                Complete
+              </div>
+            )}
           </div>
 
-          <div className="command-status-badge">
-            {statusLabel}
-          </div>
-        </div>
-
-        <div className="command-timer-value">
-          <SevenSegmentTime
-            value={timerText}
-            className="command-seven-segment-time"
+          <motion.input
+            type="text"
+            className={[
+              'command-next-action-input',
+              actionComplete
+                ? 'is-complete'
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            value={nextAction}
+            placeholder="Continue JARVIS prototype"
+            whileFocus={{
+              scale: 1.006,
+            }}
+            transition={{
+              duration: 0.16,
+              ease: 'easeOut',
+            }}
+            onChange={(event) =>
+              actions.setNextAction(
+                event.target.value,
+              )
+            }
           />
-        </div>
-        
-        {timer.status ===
-  'idle' && (
-  <div className="command-duration-custom">
-    <label className="command-duration-field">
-      <input
-        type="number"
-        min="0"
-        max="99"
-        step="1"
-        className="command-duration-input"
-        value={durationHours}
-        aria-label="Timer hours"
-        onFocus={(event) =>
-          event.target.select()
-        }
-        onChange={(event) => {
-          const hours =
-            Math.min(
-              99,
-              Math.max(
-                0,
-                Number.parseInt(
-                  event.target.value ||
-                    '0',
-                  10,
-                ) || 0,
-              ),
-            )
 
-          actions.setDurationMinutes(
-            hours * 60 +
-              durationMinutesPart,
-          )
-        }}
-      />
-
-      <span className="command-duration-unit">
-        H
-      </span>
-    </label>
-
-    <label className="command-duration-field">
-      <input
-        type="number"
-        min="0"
-        max="59"
-        step="1"
-        className="command-duration-input"
-        value={durationMinutesPart}
-        aria-label="Timer minutes"
-        onFocus={(event) =>
-          event.target.select()
-        }
-        onChange={(event) => {
-          const minutes =
-            Math.min(
-              59,
-              Math.max(
-                0,
-                Number.parseInt(
-                  event.target.value ||
-                    '0',
-                  10,
-                ) || 0,
-              ),
-            )
-
-          actions.setDurationMinutes(
-            durationHours * 60 +
-              minutes,
-          )
-        }}
-      />
-
-      <span className="command-duration-unit">
-        M
-      </span>
-    </label>
-  </div>
-)}
-
-        {timer.extensionCount > 0 && (
-          <div className="command-auto-extend">
-            AUTO EXTEND ×
-            {timer.extensionCount}
+          <div className="command-action-footer">
+            <span>
+              {actionComplete
+                ? 'All steps cleared. Timer continues until time up.'
+                : 'First unchecked checklist item drives the run.'}
+            </span>
           </div>
-        )}
+        </article>
 
-        <div className="command-duration-presets">
-          {TIMER_PRESETS_MINUTES.map(
-            (minutes) => (
-              <button
-                type="button"
-                key={minutes}
-                className={[
-                  'command-duration-button',
-                  selectedMinutes ===
-                  minutes
-                    ? 'is-selected'
-                    : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                disabled={timerLocked}
-                onClick={() =>
-                  actions.setDurationMinutes(
-                    minutes,
-                  )
-                }
-              >
-                {minutes}M
-              </button>
-            ),
-          )}
-        </div>
+        <article
+          className={[
+            'command-panel',
+            'command-panel-timer',
+            statusTone,
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          onPointerMove={updateSurfaceLight}
+          onPointerEnter={updateSurfaceLight}
+          onPointerLeave={hideSurfaceLight}
+        >
+          <div className="command-panel-heading-row">
+            <div className="command-title-with-icon">
+              <Timer
+                className="command-section-icon"
+                aria-hidden="true"
+                size={15}
+                strokeWidth={1.8}
+              />
 
-        <div className="command-timer-actions">
+              <div className="command-panel-eyebrow">
+                Timer
+              </div>
+            </div>
+          </div>
+
+          <div className="command-timer-value tabular-nums">
+            <SevenSegmentTime
+              value={timerText}
+              className="command-seven-segment-time"
+            />
+          </div>
+
           {timer.status ===
             'idle' && (
-            <button
-              type="button"
-              className="command-action-button primary"
-              onClick={actions.start}
-            >
-              START
-            </button>
-          )}
+            <div className="command-duration-custom">
+              <label className="command-duration-field">
+                <input
+                  type="number"
+                  min="0"
+                  max="99"
+                  step="1"
+                  className="command-duration-input"
+                  value={durationHours}
+                  aria-label="Timer hours"
+                  onFocus={(event) =>
+                    event.target.select()
+                  }
+                  onChange={(event) => {
+                    const hours =
+                      Math.min(
+                        99,
+                        Math.max(
+                          0,
+                          Number.parseInt(
+                            event.target.value ||
+                              '0',
+                            10,
+                          ) || 0,
+                        ),
+                      )
 
-          {timer.status ===
-            'active' && (
-            <>
-              <button
-                type="button"
-                className="command-action-button primary"
-                onClick={actions.pause}
-              >
-                PAUSE
-              </button>
+                    actions.setDurationMinutes(
+                      hours * 60 +
+                        durationMinutesPart,
+                    )
+                  }}
+                />
 
-              <button
-                type="button"
-                className="command-action-button subtle"
-                onClick={actions.end}
-              >
-                END
-              </button>
-            </>
-          )}
+                <span className="command-duration-unit">
+                  H
+                </span>
+              </label>
 
-          {timer.status ===
-            'paused' && (
-            <>
-              <button
-                type="button"
-                className="command-action-button primary"
-                onClick={actions.resume}
-              >
-                RESUME
-              </button>
+              <label className="command-duration-field">
+                <input
+                  type="number"
+                  min="0"
+                  max="59"
+                  step="1"
+                  className="command-duration-input"
+                  value={durationMinutesPart}
+                  aria-label="Timer minutes"
+                  onFocus={(event) =>
+                    event.target.select()
+                  }
+                  onChange={(event) => {
+                    const minutes =
+                      Math.min(
+                        59,
+                        Math.max(
+                          0,
+                          Number.parseInt(
+                            event.target.value ||
+                              '0',
+                            10,
+                          ) || 0,
+                        ),
+                      )
 
-              <button
-                type="button"
-                className="command-action-button subtle"
-                onClick={actions.end}
-              >
-                END
-              </button>
-            </>
-          )}
+                    actions.setDurationMinutes(
+                      durationHours * 60 +
+                        minutes,
+                    )
+                  }}
+                />
 
-          {(timer.status ===
-            'done' ||
-            timer.status ===
-              'ended') && (
-            <button
-              type="button"
-              className="command-action-button primary"
-              onClick={
-                actions.prepareNewRun
-              }
-            >
-              NEW RUN
-            </button>
-          )}
-        </div>
-      </article>
-
-      <article className="command-panel command-panel-checklist">
-        <div className="command-panel-heading-row">
-          <div className="command-panel-eyebrow">
-            CHECKLIST
-          </div>
-
-          <div className="command-progress-label">
-            {Math.round(
-              progress * 100,
-            )}%
-          </div>
-        </div>
-
-        <div className="command-progress-track">
-          <div
-            className="command-progress-fill"
-            style={{
-              width: `${progress * 100}%`,
-            }}
-          />
-        </div>
-
-        <div className="command-checklist-items">
-          {checklist.length ===
-            0 && (
-            <div className="command-empty-checklist">
-              Add the first executable step.
+                <span className="command-duration-unit">
+                  M
+                </span>
+              </label>
             </div>
           )}
 
-          {checklist.map(
-            (item) => {
-              const isCurrent =
-                item.id ===
-                currentItemId
+          {timer.extensionCount > 0 && (
+            <div className="command-auto-extend">
+              AUTO EXTEND ×
+              {timer.extensionCount}
+            </div>
+          )}
 
-              return (
-                <div
-                  key={item.id}
+          <div className="command-duration-presets">
+            {TIMER_PRESETS_MINUTES.map(
+              (minutes) => (
+                <motion.button
+                  type="button"
+                  key={minutes}
                   className={[
-                    'command-check-item',
-                    item.checked
-                      ? 'is-done'
-                      : '',
-                    isCurrent
-                      ? 'is-current'
+                    'command-duration-button',
+                    selectedMinutes ===
+                    minutes
+                      ? 'is-selected'
                       : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
+                  disabled={timerLocked}
+                  whileTap={MICRO_TAP}
+                  onClick={() =>
+                    actions.setDurationMinutes(
+                      minutes,
+                    )
+                  }
                 >
-                  <button
-                    type="button"
-                    className="command-check-toggle"
-                    onClick={() =>
-                      actions.toggleChecklistItem(
-                        item.id,
-                      )
-                    }
-                    disabled={
-                      timer.status ===
-                        'done' ||
-                      timer.status ===
-                        'ended'
-                    }
-                    aria-label={`Toggle ${item.text}`}
-                  >
-                    {item.checked
-                      ? '✓'
-                      : isCurrent
-                        ? '›'
-                        : '○'}
-                  </button>
+                  {minutes}M
+                </motion.button>
+              ),
+            )}
+          </div>
 
-                  <div className="command-check-content">
-                    {isCurrent && (
-                      <span className="command-current-label">
-                        NOW
-                      </span>
-                    )}
+          <div className="command-timer-actions">
+            {timer.status ===
+              'idle' && (
+              <motion.button
+                type="button"
+                className="command-action-button primary"
+                whileTap={MICRO_TAP}
+                onClick={actions.start}
+              >
+                <Play
+                  size={13}
+                  fill="currentColor"
+                  aria-hidden="true"
+                />
+                START
+              </motion.button>
+            )}
 
-                    <span className="command-check-text">
-                      {item.text}
-                    </span>
-                  </div>
+            {timer.status ===
+              'active' && (
+              <>
+                <motion.button
+                  type="button"
+                  className="command-action-button primary"
+                  whileTap={MICRO_TAP}
+                  onClick={actions.pause}
+                >
+                  <Pause
+                    size={13}
+                    aria-hidden="true"
+                  />
+                  PAUSE
+                </motion.button>
 
-                  <button
-                    type="button"
-                    className="command-check-delete"
-                    onClick={() =>
-                      actions.deleteChecklistItem(
-                        item.id,
-                      )
-                    }
-                    disabled={
-                      timer.status ===
-                        'done' ||
-                      timer.status ===
-                        'ended'
-                    }
-                    aria-label={`Delete ${item.text}`}
-                  >
-                    ×
-                  </button>
-                </div>
-              )
-            },
-          )}
-        </div>
+                <motion.button
+                  type="button"
+                  className="command-action-button subtle"
+                  whileTap={MICRO_TAP}
+                  onClick={actions.end}
+                >
+                  <Square
+                    size={12}
+                    aria-hidden="true"
+                  />
+                  END
+                </motion.button>
+              </>
+            )}
 
-        {timer.status !== 'done' &&
-          timer.status !==
-            'ended' && (
-          <form
-            className="command-add-step"
-            onSubmit={addItem}
-          >
-            <input
-              type="text"
-              value={newItem}
-              onChange={(event) =>
-                setNewItem(
-                  event.target.value,
-                )
-              }
-              placeholder={
-                actionComplete &&
-                timer.status ===
-                  'active'
-                  ? 'Add next step while timer continues'
-                  : 'Add checklist step'
-              }
+            {timer.status ===
+              'paused' && (
+              <>
+                <motion.button
+                  type="button"
+                  className="command-action-button primary"
+                  whileTap={MICRO_TAP}
+                  onClick={actions.resume}
+                >
+                  <Play
+                    size={13}
+                    fill="currentColor"
+                    aria-hidden="true"
+                  />
+                  RESUME
+                </motion.button>
+
+                <motion.button
+                  type="button"
+                  className="command-action-button subtle"
+                  whileTap={MICRO_TAP}
+                  onClick={actions.end}
+                >
+                  <Square
+                    size={12}
+                    aria-hidden="true"
+                  />
+                  END
+                </motion.button>
+              </>
+            )}
+
+            {(timer.status ===
+              'done' ||
+              timer.status ===
+                'ended') && (
+              <motion.button
+                type="button"
+                className="command-action-button primary"
+                whileTap={MICRO_TAP}
+                onClick={
+                  actions.prepareNewRun
+                }
+              >
+                <RotateCcw
+                  size={13}
+                  aria-hidden="true"
+                />
+                NEW RUN
+              </motion.button>
+            )}
+          </div>
+        </article>
+
+        <article
+          className="command-panel command-panel-checklist"
+          onPointerMove={updateSurfaceLight}
+          onPointerEnter={updateSurfaceLight}
+          onPointerLeave={hideSurfaceLight}
+        >
+          <div className="command-panel-heading-row">
+            <div className="command-title-with-icon">
+              <ListChecks
+                className="command-section-icon"
+                aria-hidden="true"
+                size={15}
+                strokeWidth={1.8}
+              />
+
+              <div className="command-panel-eyebrow">
+                Checklist
+              </div>
+            </div>
+
+            <div className="command-progress-label">
+              {Math.round(
+                progress * 100,
+              )}%
+            </div>
+          </div>
+
+          <div className="command-progress-track">
+            <div
+              className="command-progress-fill"
+              style={{
+                width: `${progress * 100}%`,
+              }}
             />
+          </div>
 
-            <button
-              type="submit"
-              disabled={!newItem.trim()}
+          <div className="command-checklist-items">
+            {checklist.length ===
+              0 && (
+              <div className="command-empty-checklist">
+                Add the first executable step.
+              </div>
+            )}
+
+            {checklist.map(
+              (item) => {
+                const isCurrent =
+                  item.id ===
+                  currentItemId
+
+                return (
+                  <motion.div
+                    key={item.id}
+                    layout="position"
+                    className={[
+                      'command-check-item',
+                      item.checked
+                        ? 'is-done'
+                        : '',
+                      isCurrent
+                        ? 'is-current'
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    whileHover={{
+                      x: item.checked
+                        ? 0
+                        : 2,
+                    }}
+                    transition={{
+                      duration: 0.14,
+                      ease: 'easeOut',
+                    }}
+                  >
+                    <motion.button
+                      type="button"
+                      className="command-check-toggle"
+                      whileTap={MICRO_TAP}
+                      onClick={() =>
+                        actions.toggleChecklistItem(
+                          item.id,
+                        )
+                      }
+                      disabled={
+                        timer.status ===
+                          'done' ||
+                        timer.status ===
+                          'ended'
+                      }
+                      aria-label={`Toggle ${item.text}`}
+                    >
+                      {item.checked && (
+                        <Check
+                          size={14}
+                          strokeWidth={2.2}
+                          aria-hidden="true"
+                        />
+                      )}
+
+                      {!item.checked &&
+                        isCurrent && (
+                        <ChevronRight
+                          size={15}
+                          strokeWidth={2.1}
+                          aria-hidden="true"
+                        />
+                      )}
+
+                      {!item.checked &&
+                        !isCurrent && (
+                        <Circle
+                          size={12}
+                          strokeWidth={1.7}
+                          aria-hidden="true"
+                        />
+                      )}
+                    </motion.button>
+
+                    <div className="command-check-content">
+                      {isCurrent && (
+                        <span className="command-current-label">
+                          Now
+                        </span>
+                      )}
+
+                      <span className="command-check-text">
+                        {item.text}
+                      </span>
+                    </div>
+
+                    <motion.button
+                      type="button"
+                      className="command-check-delete"
+                      whileTap={MICRO_TAP}
+                      onClick={() =>
+                        actions.deleteChecklistItem(
+                          item.id,
+                        )
+                      }
+                      disabled={
+                        timer.status ===
+                          'done' ||
+                        timer.status ===
+                          'ended'
+                      }
+                      aria-label={`Delete ${item.text}`}
+                    >
+                      <X
+                        size={13}
+                        strokeWidth={1.9}
+                        aria-hidden="true"
+                      />
+                    </motion.button>
+                  </motion.div>
+                )
+              },
+            )}
+          </div>
+
+          {timer.status !== 'done' &&
+            timer.status !==
+              'ended' && (
+            <form
+              className="command-add-step"
+              onSubmit={addItem}
             >
-              +
-            </button>
-          </form>
-        )}
-      </article>
+              <input
+                type="text"
+                value={newItem}
+                onChange={(event) =>
+                  setNewItem(
+                    event.target.value,
+                  )
+                }
+                placeholder={
+                  actionComplete &&
+                  timer.status ===
+                    'active'
+                    ? 'Add next step while timer continues'
+                    : 'Add checklist step'
+                }
+              />
+
+              <motion.button
+                type="submit"
+                disabled={!newItem.trim()}
+                whileTap={MICRO_TAP}
+                aria-label="Add checklist step"
+              >
+                <Plus
+                  size={15}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                />
+              </motion.button>
+            </form>
+          )}
+        </article>
+      </div>
 
       <div className="command-external-module command-external-weather">
         <span>WEATHER</span>

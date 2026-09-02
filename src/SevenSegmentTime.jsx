@@ -1,51 +1,48 @@
-const DIGIT_SEGMENTS = {
-  0: ['a', 'b', 'c', 'd', 'e', 'f'],
-  1: ['b', 'c'],
-  2: ['a', 'b', 'd', 'e', 'g'],
-  3: ['a', 'b', 'c', 'd', 'g'],
-  4: ['b', 'c', 'f', 'g'],
-  5: ['a', 'c', 'd', 'f', 'g'],
-  6: ['a', 'c', 'd', 'e', 'f', 'g'],
-  7: ['a', 'b', 'c'],
-  8: ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
-  9: ['a', 'b', 'c', 'd', 'f', 'g'],
-}
+import {
+  AnimatePresence,
+  motion,
+} from 'motion/react'
 
-function SevenSegmentDigit({
+function SlidingDigit({
   value,
 }) {
-  const activeSegments =
-    DIGIT_SEGMENTS[value] || []
-
   return (
     <span
-      className="seven-segment-digit"
+      className="seven-segment-digit sliding-number-digit"
       aria-hidden="true"
     >
-      {[
-        'a',
-        'b',
-        'c',
-        'd',
-        'e',
-        'f',
-        'g',
-      ].map((segment) => (
-        <span
-          key={segment}
-          className={[
-            'seven-segment',
-            `segment-${segment}`,
-            activeSegments.includes(
-              segment,
-            )
-              ? 'is-on'
-              : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-        />
-      ))}
+      <AnimatePresence
+        initial={false}
+        mode="popLayout"
+      >
+        <motion.span
+          key={value}
+          className="sliding-number-glyph"
+          initial={{
+            y: '72%',
+            opacity: 0,
+            filter: 'blur(3px)',
+          }}
+          animate={{
+            y: '0%',
+            opacity: 1,
+            filter: 'blur(0px)',
+          }}
+          exit={{
+            y: '-72%',
+            opacity: 0,
+            filter: 'blur(3px)',
+          }}
+          transition={{
+            type: 'spring',
+            stiffness: 420,
+            damping: 34,
+            mass: 0.8,
+          }}
+        >
+          {value}
+        </motion.span>
+      </AnimatePresence>
     </span>
   )
 }
@@ -58,6 +55,7 @@ export default function SevenSegmentTime({
     <span
       className={[
         'seven-segment-time',
+        'sliding-number-time',
         className,
       ]
         .filter(Boolean)
@@ -73,7 +71,7 @@ export default function SevenSegmentTime({
             return (
               <span
                 key={`colon-${index}`}
-                className="seven-segment-colon"
+                className="seven-segment-colon sliding-number-colon"
                 aria-hidden="true"
               >
                 <span />
@@ -83,8 +81,8 @@ export default function SevenSegmentTime({
           }
 
           return (
-            <SevenSegmentDigit
-              key={`${character}-${index}`}
+            <SlidingDigit
+              key={`digit-${index}`}
               value={character}
             />
           )
