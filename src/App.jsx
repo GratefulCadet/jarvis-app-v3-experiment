@@ -1,6 +1,7 @@
 import {
   useEffect,
   useReducer,
+  useRef,
   useState,
 } from 'react'
 
@@ -8,6 +9,9 @@ import CommandCenter from './CommandCenter'
 import TreePrototype from './TreePrototype'
 import QuickPip from './QuickPip'
 import useExecutionSession from './useExecutionSession'
+import useJarvisRuntime, {
+  RUNTIME_STATUS,
+} from './useJarvisRuntime'
 
 import './App.css'
 
@@ -382,6 +386,14 @@ function App() {
   const execution =
     useExecutionSession()
 
+  /*
+    JARVIS runtime (Task 2) — PiP와 Command Center가 같은 상태를 구독한다.
+    Freebuff는 runtime 밖에 있다: Qwen + Harness + Permission Gate 전부
+    Electron이 spawn한 Python bridge가 담당한다.
+  */
+  const runtime =
+    useJarvisRuntime()
+
   const getWindowApi = () => {
     if (!window.jarvisWindow) {
       console.error(
@@ -592,6 +604,37 @@ function App() {
     )
   }
 
+  /*
+    Permission Gate가 걸리면 Command Center에서 작업 중이어도
+    PiP로 돌아와 승인/거절을 보여준다 (Task 3: PiP = 승인 surface).
+  */
+  const viewRef = useRef(view)
+  const phaseRef = useRef(phase)
+
+  useEffect(() => {
+    viewRef.current = view
+    phaseRef.current = phase
+  }, [view, phase])
+
+  useEffect(() => {
+    if (
+      runtime.status !==
+        RUNTIME_STATUS.AWAITING_CONFIRMATION
+    ) {
+      return
+    }
+
+    if (
+      viewRef.current ===
+        VIEW.COMMAND_CENTER &&
+      phaseRef.current === PHASE.IDLE
+    ) {
+      requestIntent(
+        APP_INTENT.RETURN_TO_PIP,
+      )
+    }
+  }, [runtime.status])
+
   useEffect(() => {
     const handleKeyDown =
       (event) => {
@@ -691,6 +734,7 @@ function App() {
           executionContext={
             executionContext
           }
+          runtime={runtime}
         />
       )}
 
@@ -793,6 +837,7 @@ function App() {
         */}
         <QuickPip
           execution={execution}
+          runtime={runtime}
         />
       </div>
     </main>

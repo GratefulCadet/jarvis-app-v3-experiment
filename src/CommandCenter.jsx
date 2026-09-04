@@ -29,11 +29,13 @@ import {
   Zap,
 } from 'lucide-react'
 
+import ActivityTimeline from './ActivityTimeline'
+import JarvisRuntimePanel from './JarvisRuntimePanel'
+import SevenSegmentTime from './SevenSegmentTime'
+
 import {
   TIMER_PRESETS_MINUTES,
 } from './useExecutionSession'
-
-import SevenSegmentTime from './SevenSegmentTime'
 
 /*
   Command Center entrance choreography.
@@ -68,11 +70,35 @@ const MICRO_TAP = {
 export default function CommandCenter({
   execution,
   executionContext,
+  runtime,
 }) {
   const rootRef = useRef(null)
 
   const [newItem, setNewItem] =
     useState('')
+
+  const [prompt, setPrompt] =
+    useState('')
+
+  const handleJarvisSubmit = (
+    event,
+  ) => {
+    event.preventDefault()
+
+    const trimmed =
+      prompt.trim()
+
+    if (!trimmed) {
+      return
+    }
+
+    runtime.submit(
+      trimmed,
+      runtime.projectId,
+    )
+
+    setPrompt('')
+  }
 
   /*
     Anime.js boundary:
@@ -393,6 +419,79 @@ export default function CommandCenter({
       />
 
       <div className="command-workspace">
+        <article
+          className="command-panel command-panel-runtime"
+          aria-label="JARVIS runtime"
+        >
+          <div className="command-panel-heading-row">
+            <div className="command-title-with-icon">
+              <div className="command-panel-eyebrow">
+                JARVIS
+              </div>
+            </div>
+
+            {runtime.scratch && (
+              <div className="jarvis-scratch-badge">
+                SCRATCH
+              </div>
+            )}
+          </div>
+
+          <form
+            className="jarvis-command-form"
+            onSubmit={handleJarvisSubmit}
+          >
+            <input
+              className="jarvis-command-input"
+              type="text"
+              value={prompt}
+              onChange={(event) =>
+                setPrompt(event.target.value)
+              }
+              placeholder="Ask JARVIS…"
+              disabled={
+                runtime.status ===
+                  'thinking' ||
+                runtime.status ===
+                  'tool-running'
+              }
+              aria-label="JARVIS command input"
+            />
+
+            <button
+              type="submit"
+              className="jarvis-command-send"
+              disabled={
+                !prompt.trim() ||
+                runtime.status ===
+                  'thinking' ||
+                runtime.status ===
+                  'tool-running'
+              }
+            >
+              Send
+            </button>
+          </form>
+
+          <JarvisRuntimePanel
+            runtime={runtime}
+            onApprove={runtime.approve}
+            onReject={runtime.reject}
+            onDismiss={runtime.dismiss}
+          >
+            <div className="jarvis-runtime-placeholder">
+              {runtime.text ||
+                '할 일을 물어보거나, 새 task를 추가해보세요.'}
+            </div>
+          </JarvisRuntimePanel>
+
+          <ActivityTimeline
+            timeline={runtime.timeline}
+            traceId={runtime.traceId}
+            tracePath={runtime.tracePath}
+          />
+        </article>
+
         <article
           className="command-panel command-panel-objective"
           onPointerMove={updateSurfaceLight}

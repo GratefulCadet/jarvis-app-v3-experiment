@@ -7744,3 +7744,330 @@
     animation: none;
   }
 }
+
+/* ============================================================
+   JARVIS runtime (Task 1–5) — Electron ↔ Python Harness 통합 surface
+   검은/흰 기본 디자인, 제한된 모션, PiP는 한 번에 하나의 정보.
+   ============================================================ */
+
+.jarvis-runtime-panel {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #fff;
+}
+
+.jarvis-runtime-panel.is-activity {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.jarvis-runtime-panel.is-permission {
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.jarvis-runtime-panel.is-error {
+  border-color: rgba(255, 120, 120, 0.7);
+  color: #ffb3b3;
+}
+
+.jarvis-runtime-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.jarvis-runtime-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff;
+  animation: jarvis-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes jarvis-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+.jarvis-runtime-status-text {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.jarvis-scratch-badge {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: #fff;
+  background: transparent;
+}
+
+.jarvis-permission-action {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.jarvis-permission-title {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.jarvis-permission-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.jarvis-permission-note {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  font-style: italic;
+}
+
+.jarvis-permission-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.jarvis-approve-button,
+.jarvis-reject-button {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: transparent;
+  color: #fff;
+  border-radius: 8px;
+  padding: 7px 0;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.jarvis-approve-button:hover {
+  background: rgba(255, 255, 255, 0.9);
+  color: #000;
+}
+
+.jarvis-reject-button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.jarvis-runtime-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: pre-wrap;
+}
+
+.jarvis-runtime-trace {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  overflow-wrap: anywhere;
+}
+
+.jarvis-runtime-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.jarvis-mini-dismiss {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+.jarvis-command-form {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.jarvis-command-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  color: #fff;
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+}
+
+.jarvis-command-input:focus {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.jarvis-command-send {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: transparent;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.jarvis-command-send:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.9);
+  color: #000;
+}
+
+.jarvis-command-send:disabled,
+.jarvis-command-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.jarvis-runtime-placeholder {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 6px 2px;
+}
+
+/* Activity timeline (Task 5) */
+
+.jarvis-activity-timeline {
+  margin-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 8px;
+}
+
+.jarvis-timeline-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.jarvis-timeline-count {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 10px;
+}
+
+.jarvis-timeline-chevron {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.jarvis-timeline-trace {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 4px 0;
+}
+
+.jarvis-timeline-trace-path {
+  overflow-wrap: anywhere;
+}
+
+.jarvis-timeline-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.jarvis-timeline-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.jarvis-timeline-label {
+  flex: 0 0 auto;
+  min-width: 96px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.jarvis-timeline-item.is-user .jarvis-timeline-label {
+  color: #fff;
+}
+
+.jarvis-timeline-item.is-tool-ok .jarvis-timeline-label {
+  color: rgba(180, 255, 200, 0.9);
+}
+
+.jarvis-timeline-item.is-tool-error .jarvis-timeline-label,
+.jarvis-timeline-item.is-error .jarvis-timeline-label {
+  color: #ffb3b3;
+}
+
+.jarvis-timeline-item.is-permission .jarvis-timeline-label {
+  color: #ffd479;
+}
+
+.jarvis-timeline-item.is-approved .jarvis-timeline-label {
+  color: #b4ffc8;
+}
+
+.jarvis-timeline-item.is-rejected .jarvis-timeline-label {
+  color: #ff9d9d;
+}
+
+.jarvis-timeline-item.is-qwen .jarvis-timeline-label {
+  color: #b9d4ff;
+}
+
+.jarvis-timeline-detail {
+  color: rgba(255, 255, 255, 0.85);
+  overflow-wrap: anywhere;
+}
+
+.jarvis-timeline-empty {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  padding: 4px 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-runtime-dot {
+    animation: none;
+    opacity: 0.7;
+  }
+}

@@ -254,3 +254,15 @@ app.on(
     }
   },
 )
+
+/*
+  JARVIS runtime bridge (Task 1) — Python Harness 자식 프로세스 IPC.
+  Freebuff는 runtime에 관여하지 않는다: Electron main ↔ python bridge ↔ Qwen.
+*/
+const { registerBridgeIpc } = require('./bridge-ipc.cjs')
+
+registerBridgeIpc({
+  ipcMain,
+  app,
+  windowGetter: () => mainWindow,
+})

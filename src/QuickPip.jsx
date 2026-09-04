@@ -14,9 +14,11 @@ import {
 } from './useExecutionSession'
 
 import SevenSegmentTime from './SevenSegmentTime'
+import JarvisRuntimePanel from './JarvisRuntimePanel'
 
 export default function QuickPip({
   execution,
+  runtime,
 }) {
   const {
     nextAction,
@@ -174,6 +176,12 @@ export default function QuickPip({
       className="quick-pip"
       aria-label="JARVIS quick interaction"
     >
+      <JarvisRuntimePanel
+        runtime={runtime}
+        onApprove={runtime.approve}
+        onReject={runtime.reject}
+        onDismiss={runtime.dismiss}
+      >
       <div className="quick-pip-next-action">
         <div className="quick-pip-text-loop">
           <span className="quick-pip-text-loop-label">
@@ -400,6 +408,7 @@ export default function QuickPip({
           </span>
         </div>
       </div>
+      </JarvisRuntimePanel>
     </aside>
   )
 }
