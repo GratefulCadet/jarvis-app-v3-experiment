@@ -13,6 +13,7 @@ import {
 import {
   ArrowLeft,
   Check,
+  ChevronDown,
   ChevronRight,
   Circle,
   Crosshair,
@@ -26,6 +27,7 @@ import {
   Play,
   Plus,
   Search,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react'
@@ -48,6 +50,9 @@ const SPACE_DOTS = [
 const PINNED_SHORTCUTS_KEY =
   'jarvis_tree_pinned_shortcuts_v1'
 
+const EXPANDED_TREE_KEY =
+  'jarvis_tree_expanded_v1'
+
 const TONE_PRESETS = [
   [126, 219, 255],
   [166, 229, 196],
@@ -55,7 +60,6 @@ const TONE_PRESETS = [
   [227, 182, 255],
 ]
 
-const CAROUSEL_SPACING = 430
 const CAROUSEL_WHEEL_LOCK_MS = 140
 const CAROUSEL_MOVE_SECONDS = 0.22
 
@@ -98,6 +102,36 @@ const readPinnedShortcuts = () => {
     )
 
     return []
+  }
+}
+
+const readExpandedTreeIds = () => {
+  if (typeof window === 'undefined') {
+    return new Set()
+  }
+
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(
+        EXPANDED_TREE_KEY,
+      ) || '[]',
+    )
+
+    return new Set(
+      Array.isArray(parsed)
+        ? parsed.filter(
+            (nodeId) =>
+              typeof nodeId === 'string',
+          )
+        : [],
+    )
+  } catch (error) {
+    console.warn(
+      'Failed to load JARVIS tree expansion.',
+      error,
+    )
+
+    return new Set()
   }
 }
 
@@ -150,8 +184,112 @@ const flattenTree = (
   ),
 ]
 
+/*
+  VS Code 탐색기 스타일의 접이식 트리 행.
+  chevron(있으면) = 펼치기/접기, label = 해당 노드로 이동.
+*/
+function TreeMapRows({
+  rows,
+  currentNodeId,
+  goToNode,
+  onToggleExpanded,
+}) {
+  return rows.map(
+    ({
+      node,
+      depth,
+      expanded,
+      hasChildren,
+      parentIds,
+    }) => {
+      const isActive =
+        node.id === currentNodeId
+
+      const isDescendant =
+        Array.isArray(parentIds) &&
+        parentIds.includes(
+          currentNodeId,
+        )
+
+      return (
+        <div
+          key={node.id}
+          className="tree-prototype-map-row"
+          style={{
+            '--map-depth': depth,
+          }}
+        >
+          <button
+            type="button"
+            className="tree-prototype-map-chevron"
+            disabled={!hasChildren}
+            aria-expanded={
+              hasChildren
+                ? expanded
+                : undefined
+            }
+            aria-label={
+              hasChildren
+                ? expanded
+                  ? `Collapse ${node.label}`
+                  : `Expand ${node.label}`
+                : undefined
+            }
+            onClick={(event) => {
+              event.stopPropagation()
+              onToggleExpanded(
+                node.id,
+              )
+            }}
+          >
+            {hasChildren ? (
+              expanded ? (
+                <ChevronDown
+                  size={12}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                />
+              ) : (
+                <ChevronRight
+                  size={12}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                />
+              )
+            ) : (
+              <span
+                className="tree-prototype-map-leaf"
+                aria-hidden="true"
+              />
+            )}
+          </button>
+
+          <button
+            type="button"
+            className={[
+              'tree-prototype-map-label',
+              isActive ? 'is-active' : '',
+              isDescendant
+                ? 'is-descendant'
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            onClick={() =>
+              goToNode(node.id)
+            }
+          >
+            {node.label}
+          </button>
+        </div>
+      )
+    },
+  )
+}
+
 export default function TreePrototype({
   onOpenExecution,
+  runtime,
 }) {
   const taskTree =
     useTaskTree()
@@ -190,6 +328,28 @@ export default function TreePrototype({
   ] = useState(
     readPinnedShortcuts,
   )
+
+  const [
+    expandedNodeIds,
+    setExpandedNodeIds,
+  ] = useState(() => {
+    const initial =
+      readExpandedTreeIds()
+
+    // 첫 실행 기본값: 루트 + 최상위 브랜치만 펼친 상태
+    if (initial.size === 0) {
+      initial.add(taskTree.root.id)
+      for (const child of
+        taskTree.root.children) {
+        initial.add(child.id)
+      }
+    }
+
+    return initial
+  })
+
+  const [askText, setAskText] =
+    useState('')
 
   const [
     previewNodeId,
@@ -255,6 +415,36 @@ export default function TreePrototype({
     setFocusIndex(0)
     setPreviewNodeId(null)
     setActivePopover(null)
+
+    // 이동하는 경로는 자동으로 펼친다 (탐색기 reveal 느낌).
+    const destination =
+      taskTree.find(nodeId)
+
+    if (destination) {
+      setExpandedNodeIds(
+        (previous) => {
+          const next = new Set(
+            previous,
+          )
+
+          let changed = false
+
+          for (const pathNode of
+            destination.path) {
+            if (
+              !next.has(pathNode.id)
+            ) {
+              next.add(pathNode.id)
+              changed = true
+            }
+          }
+
+          return changed
+            ? next
+            : previous
+        },
+      )
+    }
   }
 
   const moveFocus = (
@@ -317,6 +507,25 @@ export default function TreePrototype({
     }
   }, [pinnedNodeIds])
 
+  /*
+    접힘/펼침 상태 저장 (VS Code 탐색기처럼 유지).
+  */
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        EXPANDED_TREE_KEY,
+        JSON.stringify(
+          [...expandedNodeIds],
+        ),
+      )
+    } catch (error) {
+      console.warn(
+        'Failed to save JARVIS tree expansion.',
+        error,
+      )
+    }
+  }, [expandedNodeIds])
+
   const visibleMapNodes =
     flatNodes.filter((entry) => {
       const query =
@@ -337,6 +546,95 @@ export default function TreePrototype({
           .includes(query)
       )
     })
+
+  /*
+    접이식 트리 행 계산.
+    - 검색 중이면 검색 결과 전체를 depth 들여쓰기로 보여준다(접힘 무시).
+    - 평소에는 펼쳐진 노드의 자식만 재귀로 내려간다.
+  */
+  const buildTreeRows = (
+    node,
+    depth,
+    ancestors = [],
+  ) => {
+    const hasChildren =
+      (node.children?.length ?? 0) >
+      0
+
+    const expanded =
+      expandedNodeIds.has(node.id)
+
+    const rows = [
+      {
+        node,
+        depth,
+        expanded,
+        hasChildren,
+        parentIds: ancestors,
+      },
+    ]
+
+    if (expanded) {
+      for (const child of
+        node.children ?? []) {
+        rows.push(
+          ...buildTreeRows(
+            child,
+            depth + 1,
+            [...ancestors, node.id],
+          ),
+        )
+      }
+    }
+
+    return rows
+  }
+
+  const searchActive =
+    searchText.trim()
+
+  const treeRows =
+    buildTreeRows(
+      taskTree.root,
+      0,
+    )
+
+  const visibleRows =
+    searchActive
+      ? visibleMapNodes.map(
+          (entry) => ({
+            ...entry,
+            hasChildren:
+              (entry.node
+                .children?.length ??
+                0) > 0,
+            expanded:
+              expandedNodeIds.has(
+                entry.node.id,
+              ),
+          }),
+        )
+      : treeRows
+
+  const toggleExpanded = (
+    nodeId,
+  ) => {
+    setExpandedNodeIds(
+      (previous) => {
+        const next = new Set(
+          previous,
+        )
+
+        if (next.has(nodeId)) {
+          next.delete(nodeId)
+        } else {
+          next.add(nodeId)
+        }
+
+        return next
+      },
+    )
+  }
 
   const [
     editDraftState,
@@ -485,6 +783,40 @@ export default function TreePrototype({
       node,
       path,
     })
+  }
+
+  /*
+    Dock의 Ask JARVIS — execution이 아니어도 AI 입력을 받는다.
+    Permission Gate가 걸리면 App이 자동으로 PiP 승인 화면으로 전환한다.
+  */
+  const askBusy =
+    runtime?.status === 'thinking' ||
+    runtime?.status === 'tool-running' ||
+    runtime?.status ===
+      'awaiting-confirmation'
+
+  const handleAskSubmit = (
+    event,
+  ) => {
+    event.preventDefault()
+
+    if (!runtime) {
+      return
+    }
+
+    const trimmed =
+      askText.trim()
+
+    if (!trimmed || askBusy) {
+      return
+    }
+
+    runtime.submit(
+      trimmed,
+      runtime.projectId,
+    )
+
+    setAskText('')
   }
 
   const handleCarouselWheel = (
@@ -1186,44 +1518,21 @@ export default function TreePrototype({
         </div>
 
         <div className="tree-prototype-overview-list">
-          {visibleMapNodes.map(
-            (entry) => (
-              <button
-                type="button"
-                key={
-                  entry.node.id
-                }
-                className={[
-                  entry.node.id ===
-                  node.id
-                    ? 'is-active'
-                    : '',
-                  entry.parentIds.includes(
-                    node.id,
-                  )
-                    ? 'is-descendant'
-                    : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                style={{
-                  '--map-depth':
-                    entry.depth,
-                }}
-                onClick={() =>
-                  goToNode(
-                    entry.node.id,
-                  )
-                }
-              >
-                <span />
-                {
-                  entry.node
-                    .label
-                }
-              </button>
-            ),
+          {visibleRows.length ===
+            0 && (
+            <div className="tree-prototype-overview-empty">
+              No matching nodes.
+            </div>
           )}
+
+          <TreeMapRows
+            rows={visibleRows}
+            currentNodeId={node.id}
+            goToNode={goToNode}
+            onToggleExpanded={
+              toggleExpanded
+            }
+          />
         </div>
       </aside>
 
@@ -1242,7 +1551,7 @@ export default function TreePrototype({
           }
         >
           <Home
-            size={16}
+            size={21}
             aria-hidden="true"
           />
           <span>Home</span>
@@ -1260,7 +1569,7 @@ export default function TreePrototype({
           }
         >
           <ArrowLeft
-            size={16}
+            size={21}
             aria-hidden="true"
           />
           <span>Back</span>
@@ -1285,7 +1594,7 @@ export default function TreePrototype({
           }}
         >
           <Pencil
-            size={16}
+            size={21}
             aria-hidden="true"
           />
           <span>Edit</span>
@@ -1310,7 +1619,7 @@ export default function TreePrototype({
           }}
         >
           <Plus
-            size={16}
+            size={21}
             aria-hidden="true"
           />
           <span>Add</span>
@@ -1334,12 +1643,12 @@ export default function TreePrototype({
         >
           {isCurrentPinned ? (
             <PinOff
-              size={16}
+              size={21}
               aria-hidden="true"
             />
           ) : (
             <Pin
-              size={16}
+              size={21}
               aria-hidden="true"
             />
           )}
@@ -1372,10 +1681,35 @@ export default function TreePrototype({
           }}
         >
           <Search
-            size={16}
+            size={21}
             aria-hidden="true"
           />
           <span>Search</span>
+        </button>
+
+        <button
+          type="button"
+          aria-label="Ask JARVIS"
+          className={
+            activePopover === 'ask'
+              ? 'is-active'
+              : ''
+          }
+          onClick={(event) => {
+            event.stopPropagation()
+
+            setActivePopover(
+              activePopover === 'ask'
+                ? null
+                : 'ask',
+            )
+          }}
+        >
+          <Sparkles
+            size={21}
+            aria-hidden="true"
+          />
+          <span>Ask</span>
         </button>
 
         <button
@@ -1386,7 +1720,7 @@ export default function TreePrototype({
           }
         >
           <Play
-            size={16}
+            size={21}
             fill="currentColor"
             aria-hidden="true"
           />
@@ -1415,7 +1749,7 @@ export default function TreePrototype({
               }
             >
               <Crosshair
-                size={16}
+                size={21}
                 aria-hidden="true"
               />
               <span>
@@ -1482,6 +1816,105 @@ export default function TreePrototype({
                 autoFocus
               />
             </motion.div>
+          )}
+
+          {activePopover ===
+            'ask' && (
+            <motion.form
+              key="ask-popover"
+              className="tree-prototype-popover tree-prototype-ask-form"
+              initial={{
+                opacity: 0,
+                y: 12,
+                scale: 0.94,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                scale: 1,
+              }}
+              exit={{
+                opacity: 0,
+                y: 10,
+                scale: 0.96,
+              }}
+              transition={{
+                type: 'spring',
+                bounce: 0.08,
+                duration: 0.18,
+              }}
+              onPointerDown={(
+                event,
+              ) =>
+                event.stopPropagation()
+              }
+              onSubmit={handleAskSubmit}
+            >
+              <div className="tree-prototype-editor-title">
+                <Sparkles
+                  size={12}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
+                ASK JARVIS
+              </div>
+
+              <input
+                type="text"
+                value={askText}
+                placeholder="무엇이든 물어보세요…"
+                onChange={(event) =>
+                  setAskText(
+                    event.target.value,
+                  )
+                }
+                aria-label="Ask JARVIS from dock"
+                disabled={askBusy}
+                autoFocus
+              />
+
+              <div className="tree-prototype-ask-row">
+                <button
+                  type="submit"
+                  disabled={
+                    !askText.trim() ||
+                    askBusy
+                  }
+                >
+                  ASK
+                </button>
+              </div>
+
+              {askBusy && (
+                <div className="tree-prototype-ask-status">
+                  {runtime?.status ===
+                  'tool-running'
+                    ? '승인된 작업 실행 중…'
+                    : runtime?.status ===
+                        'awaiting-confirmation'
+                      ? '승인이 필요합니다 — PiP에서 확인하세요'
+                      : 'Thinking…'}
+                </div>
+              )}
+
+              {!askBusy &&
+                runtime?.status ===
+                  'done' &&
+                runtime.text && (
+                <div className="tree-prototype-ask-answer">
+                  {runtime.text}
+                </div>
+              )}
+
+              {!askBusy &&
+                runtime?.status ===
+                  'error' && (
+                <div className="tree-prototype-ask-error">
+                  {runtime.error ||
+                    '오류가 발생했습니다'}
+                </div>
+              )}
+            </motion.form>
           )}
 
           {activePopover ===
@@ -1868,42 +2301,24 @@ export default function TreePrototype({
               </div>
 
               <div className="tree-prototype-map-dialog-list">
-                {visibleMapNodes.map(
-                  (entry) => (
-                    <button
-                      type="button"
-                      key={
-                        entry.node.id
-                      }
-                      className={
-                        entry.node
-                          .id ===
-                        node.id
-                          ? 'is-active'
-                          : ''
-                      }
-                      style={{
-                        '--map-depth':
-                          entry.depth,
-                      }}
-                      onClick={() => {
-                        goToNode(
-                          entry.node
-                            .id,
-                        )
-                        setDialog(
-                          null,
-                        )
-                      }}
-                    >
-                      <span />
-                      {
-                        entry.node
-                          .label
-                      }
-                    </button>
-                  ),
+                {visibleRows.length ===
+                  0 && (
+                  <div className="tree-prototype-overview-empty">
+                    No matching nodes.
+                  </div>
                 )}
+
+                <TreeMapRows
+                  rows={visibleRows}
+                  currentNodeId={node.id}
+                  goToNode={(nodeId) => {
+                    goToNode(nodeId)
+                    setDialog(null)
+                  }}
+                  onToggleExpanded={
+                    toggleExpanded
+                  }
+                />
               </div>
             </motion.div>
           </motion.div>

@@ -26,6 +26,8 @@ export default function JarvisRuntimePanel({
   onReject,
   onDismiss,
   children,
+  variant = 'full',
+  pipMode = false,
 }) {
   const {
     status,
@@ -122,6 +124,37 @@ export default function JarvisRuntimePanel({
   }
 
   if (status === RUNTIME_STATUS.DONE) {
+    /*
+      quiet variant (빠른 플로팅 패널 / PiP):
+      - Command Center를 보고 있는 동안에는 긴 Qwen 답변을 패널에 중복 표시하지
+        않는다 (Command Center 자체 패널이 전체 답변을 보여준다).
+      - 실제 PiP 상태에서는 답변 전체 대신 짧은 완료 알림만 보여준다.
+    */
+    if (variant === 'quiet' && !pipMode) {
+      return children
+    }
+
+    if (variant === 'quiet') {
+      return (
+        <div className="jarvis-runtime-panel is-done is-quiet" aria-live="polite">
+          <div className="jarvis-runtime-heading">
+            <span className="jarvis-runtime-status-text">
+              Done
+            </span>
+            {scratch && (
+              <span className="jarvis-scratch-badge">
+                {SCRATCH_BADGE}
+              </span>
+            )}
+          </div>
+
+          <div className="jarvis-runtime-quiet-note">
+            응답 완료 — 자세한 답변은 Command Center에서 확인하세요.
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="jarvis-runtime-panel is-done" aria-live="polite">
         <div className="jarvis-runtime-heading">

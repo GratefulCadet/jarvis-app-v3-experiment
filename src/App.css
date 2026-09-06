@@ -6572,7 +6572,7 @@
       0.36
     );
 
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.14em;
 }
@@ -6740,7 +6740,8 @@
 }
 
 .tree-prototype-edit-form,
-.tree-prototype-add-form {
+.tree-prototype-add-form,
+.tree-prototype-ask-form {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -6813,7 +6814,8 @@
 .tree-prototype-edit-form select,
 .tree-prototype-add-form input,
 .tree-prototype-add-form textarea,
-.tree-prototype-add-form select {
+.tree-prototype-add-form select,
+.tree-prototype-ask-form input {
   width: 100%;
 
   box-sizing: border-box;
@@ -6913,13 +6915,15 @@
 }
 
 .tree-prototype-edit-form option,
-.tree-prototype-add-form option {
+.tree-prototype-add-form option,
+.tree-prototype-ask-form option {
   background: #080808;
   color: rgba(255, 255, 255, 0.86);
 }
 
 .tree-prototype-editor-actions,
-.tree-prototype-add-row {
+.tree-prototype-add-row,
+.tree-prototype-ask-row {
   display: grid;
   grid-template-columns:
     repeat(
@@ -6935,8 +6939,40 @@
     auto;
 }
 
+.tree-prototype-ask-row {
+  grid-template-columns:
+    minmax(0, 1fr);
+}
+
+.tree-prototype-ask-status {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.06em;
+}
+
+.tree-prototype-ask-answer {
+  max-height: 180px;
+  overflow: auto;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.88);
+  white-space: pre-wrap;
+}
+
+.tree-prototype-ask-error {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #ffb3b3;
+  overflow-wrap: anywhere;
+}
+
 .tree-prototype-editor-actions button,
-.tree-prototype-add-row button {
+.tree-prototype-add-row button,
+.tree-prototype-ask-row button {
   appearance: none;
 
   min-width: 0;
@@ -6990,8 +7026,10 @@
 
 .tree-prototype-editor-actions button:hover,
 .tree-prototype-add-row button:hover,
+.tree-prototype-ask-row button:hover,
 .tree-prototype-editor-actions button:focus-visible,
-.tree-prototype-add-row button:focus-visible {
+.tree-prototype-add-row button:focus-visible,
+.tree-prototype-ask-row button:focus-visible {
   border-color:
     rgba(
       255,
@@ -7021,7 +7059,8 @@
 }
 
 .tree-prototype-editor-actions button:focus-visible,
-.tree-prototype-add-row button:focus-visible {
+.tree-prototype-add-row button:focus-visible,
+.tree-prototype-ask-row button:focus-visible {
   outline:
     1px solid
     rgba(
@@ -7034,7 +7073,9 @@
   outline-offset: 2px;
 }
 
-.tree-prototype-editor-actions button:disabled {
+.tree-prototype-editor-actions button:disabled,
+.tree-prototype-add-row button:disabled,
+.tree-prototype-ask-row button:disabled {
   opacity: 0.32;
   cursor: not-allowed;
   transform: none;
@@ -7073,7 +7114,7 @@
 }
 
 .tree-prototype-overview {
-  height: min(310px, 36vh);
+  height: min(420px, 44vh);
 }
 
 .tree-prototype-overview-search {
@@ -7138,7 +7179,7 @@
     );
 
   font-family: inherit;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .tree-prototype-overview-list {
@@ -7167,53 +7208,84 @@
     );
 }
 
-.tree-prototype-overview-list button {
-  appearance: none;
-
-  min-height: 20px;
-
+/*
+  VS Code 탐색기 스타일 접이식 트리 행.
+*/
+.tree-prototype-map-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 3px;
 
-  padding:
-    3px
-    6px
-    3px
+  min-height: 26px;
+
+  padding-left:
     calc(
-      6px +
+      4px +
       var(--map-depth) *
-      10px
+      12px
     );
 
-  border:
-    1px solid
-    transparent;
+  border-radius: 8px;
+}
 
-  border-radius: 7px;
-
+.tree-prototype-map-row:hover {
   background:
-    transparent;
+    rgba(
+      255,
+      255,
+      255,
+      0.045
+    );
+}
+
+.tree-prototype-map-chevron {
+  appearance: none;
+
+  flex: 0 0 auto;
+
+  width: 18px;
+  height: 18px;
+
+  display: grid;
+  place-items: center;
+
+  padding: 0;
+
+  border: 0;
+  border-radius: 5px;
+
+  background: transparent;
 
   color:
     rgba(
       255,
       255,
       255,
-      0.42
+      0.35
     );
-
-  font-family: inherit;
-  font-size: 9px;
-  line-height: 1.2;
-  text-align: left;
 
   cursor: pointer;
 }
 
-.tree-prototype-overview-list button span {
-  width: 5px;
-  height: 5px;
+.tree-prototype-map-chevron:hover:not(:disabled) {
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.08
+    );
+
+  color: #fff;
+}
+
+.tree-prototype-map-chevron:disabled {
+  cursor: default;
+}
+
+.tree-prototype-map-leaf {
+  width: 4px;
+  height: 4px;
 
   flex: 0 0 auto;
 
@@ -7224,63 +7296,100 @@
       255,
       255,
       255,
-      0.20
+      0.25
     );
 }
 
-.tree-prototype-overview-list button:hover,
-.tree-prototype-overview-list button.is-descendant {
-  color:
-    rgba(
-      255,
-      255,
-      255,
-      0.72
-    );
+.tree-prototype-map-label {
+  appearance: none;
 
-  background:
-    rgba(
-      255,
-      255,
-      255,
-      0.045
-    );
-}
+  flex: 1;
+  min-width: 0;
 
-.tree-prototype-overview-list button.is-active {
-  border-color:
-    rgba(
-      255,
-      255,
-      255,
-      0.24
-    );
+  padding:
+    4px
+    6px;
 
-  background:
-    rgba(
-      255,
-      255,
-      255,
-      0.09
-    );
+  border: 0;
+  border-radius: 6px;
+
+  background: transparent;
 
   color:
     rgba(
       255,
       255,
       255,
-      0.92
+      0.48
     );
+
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: left;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  cursor: pointer;
 }
 
-.tree-prototype-overview-list button.is-active span {
+.tree-prototype-map-label:hover,
+.tree-prototype-map-label.is-descendant {
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.82
+    );
+
   background:
     rgba(
       255,
       255,
       255,
-      0.88
+      0.05
     );
+}
+
+.tree-prototype-map-label.is-active {
+  color: #fff;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.12
+    );
+
+  box-shadow:
+    inset 0 0 0
+      1px
+      rgba(
+        255,
+        255,
+        255,
+        0.22
+      );
+}
+
+.tree-prototype-overview-empty {
+  padding:
+    8px
+    6px;
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.35
+    );
+
+  font-size: 12px;
 }
 
 .tree-prototype-dock {
@@ -7289,14 +7398,14 @@
   bottom: clamp(18px, 3.5vh, 34px);
   z-index: 8;
 
-  max-width: min(760px, 72vw);
+  max-width: min(900px, 78vw);
 
   display: flex;
   align-items: flex-end;
-  gap: 6px;
+  gap: 8px;
 
   padding:
-    8px;
+    10px;
 
   border:
     1px solid
@@ -7307,7 +7416,7 @@
       0.12
     );
 
-  border-radius: 20px;
+  border-radius: 24px;
 
   background:
     linear-gradient(
@@ -7360,8 +7469,8 @@
 
   position: relative;
 
-  width: 42px;
-  height: 42px;
+  width: 54px;
+  height: 54px;
 
   display: grid;
   place-items: center;
@@ -7375,7 +7484,7 @@
       0.10
     );
 
-  border-radius: 14px;
+  border-radius: 16px;
 
   background:
     rgba(
@@ -7414,11 +7523,11 @@
   left: 50%;
   bottom: calc(100% + 8px);
 
-  max-width: 120px;
+  max-width: 160px;
 
   padding:
-    4px
-    7px;
+    5px
+    9px;
 
   border:
     1px solid
@@ -7447,7 +7556,7 @@
       0.72
     );
 
-  font-size: 8px;
+  font-size: 10px;
   line-height: 1.15;
   white-space: nowrap;
 
@@ -7467,7 +7576,7 @@
 .tree-prototype-dock > button:hover,
 .tree-prototype-dock > button:focus-visible,
 .tree-prototype-dock > button.is-active {
-  width: 54px;
+  width: 70px;
 
   border-color:
     rgba(
@@ -7530,7 +7639,7 @@
   left: 50%;
   bottom: calc(100% + 16px);
 
-  width: 318px;
+  width: 400px;
 
   translate: -50% 0;
 
@@ -7779,7 +7888,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.85);
@@ -7870,10 +7979,22 @@
 }
 
 .jarvis-runtime-text {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.5;
   color: rgba(255, 255, 255, 0.9);
   white-space: pre-wrap;
+}
+
+/* PiP의 조용한 완료 알림 (Qwen 답변 전문은 Command Center에서만) */
+.jarvis-runtime-panel.is-quiet {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.jarvis-runtime-quiet-note {
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .jarvis-runtime-trace {
@@ -7909,10 +8030,10 @@
   min-width: 0;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 8px;
+  border-radius: 10px;
   color: #fff;
-  padding: 8px 10px;
-  font-size: 13px;
+  padding: 10px 12px;
+  font-size: 16px;
   outline: none;
 }
 
@@ -7924,9 +8045,9 @@
   border: 1px solid rgba(255, 255, 255, 0.5);
   background: transparent;
   color: #fff;
-  border-radius: 8px;
-  padding: 0 14px;
-  font-size: 12px;
+  border-radius: 10px;
+  padding: 0 16px;
+  font-size: 14px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
@@ -7947,7 +8068,7 @@
 
 .jarvis-mic-button {
   flex: 0 0 auto;
-  width: 34px;
+  width: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7986,6 +8107,41 @@
   cursor: not-allowed;
 }
 
+/* Voice interaction mode 토글 (STEP 4) */
+
+.jarvis-voice-mode-button {
+  flex: 0 0 auto;
+  width: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition:
+    border-color 140ms ease-out,
+    background 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.jarvis-voice-mode-button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+
+.jarvis-voice-mode-button.is-active {
+  border-color: rgba(140, 230, 255, 0.7);
+  background: rgba(140, 230, 255, 0.16);
+  color: #b8f0ff;
+}
+
+.jarvis-voice-mode-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 @keyframes jarvis-mic-breathing {
   0%,
   100% {
@@ -8003,7 +8159,7 @@
   flex-wrap: wrap;
   gap: 6px;
   margin: -2px 0 10px;
-  font-size: 12px;
+  font-size: 14px;
   color: rgba(255, 255, 255, 0.75);
   line-height: 1.4;
 }
@@ -8190,4 +8346,237 @@
     animation: none;
     opacity: 0.7;
   }
+}
+
+/*
+  TreePrototype dialog (삭제 확인 / 확장 시스템 맵).
+  기존에 스타일이 없어 raw로 보이던 부분을 최소 스타일로 정리한다.
+*/
+.tree-prototype-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+
+  display: grid;
+  place-items: center;
+
+  background:
+    rgba(
+      0,
+      0,
+      0,
+      0.55
+    );
+
+  backdrop-filter: blur(6px);
+}
+
+.tree-prototype-dialog {
+  min-width: min(480px, 86vw);
+  max-width: 92vw;
+  max-height: 74vh;
+
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  padding: 20px;
+
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.14
+    );
+
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.06),
+      rgba(255, 255, 255, 0.012)
+    ),
+    rgba(
+      0,
+      0,
+      0,
+      0.72
+    );
+
+  box-shadow:
+    0 32px 96px
+      rgba(
+        0,
+        0,
+        0,
+        0.5
+      ),
+    inset 0 1px 0
+      rgba(
+        255,
+        255,
+        255,
+        0.06
+      );
+
+  backdrop-filter: blur(20px);
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.9
+    );
+}
+
+.tree-prototype-dialog-title {
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.85
+    );
+}
+
+.tree-prototype-dialog p {
+  margin: 0;
+
+  font-size: 14px;
+  line-height: 1.5;
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.7
+    );
+}
+
+.tree-prototype-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.tree-prototype-dialog-actions button {
+  appearance: none;
+
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.35
+    );
+
+  background: transparent;
+
+  color: #fff;
+
+  border-radius: 8px;
+
+  padding:
+    8px
+    14px;
+
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+
+  cursor: pointer;
+}
+
+.tree-prototype-dialog-actions button:hover {
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.12
+    );
+}
+
+.tree-prototype-dialog-actions button.is-danger {
+  border-color:
+    rgba(
+      255,
+      120,
+      120,
+      0.7
+    );
+
+  color: #ffb3b3;
+}
+
+.tree-prototype-map-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tree-prototype-map-dialog-header > button {
+  width: 30px;
+  height: 30px;
+
+  display: grid;
+  place-items: center;
+
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.25
+    );
+
+  border-radius: 8px;
+
+  background: transparent;
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.7
+    );
+
+  cursor: pointer;
+}
+
+.tree-prototype-map-dialog-header > button:hover {
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.12
+    );
+
+  color: #fff;
+}
+
+.tree-prototype-map-dialog-list {
+  min-height: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  overflow: auto;
 }

@@ -13,6 +13,8 @@ import useJarvisRuntime, {
   RUNTIME_STATUS,
 } from './useJarvisRuntime'
 
+import useVoiceOutput from './useVoiceOutput'
+
 import './App.css'
 
 const PIP_BREAKPOINT = 500
@@ -394,6 +396,59 @@ function App() {
   const runtime =
     useJarvisRuntime()
 
+  /*
+    Voice interaction mode (STEP 4).
+    App이 훅을 소유하고 DONE 시 speak를 담당하므로,
+    승인(PiP) 후 완료되거나 Command Center에서 완료되거나
+    어느 surface에서든 음성 모드라면 응답을 소리로 들려준다.
+  */
+  const voiceOutput =
+    useVoiceOutput()
+
+  const voiceEnabled =
+    voiceOutput.enabled
+
+  const speakVoice =
+    voiceOutput.speak
+
+  const lastSpokenRef =
+    useRef(null)
+
+  useEffect(() => {
+    if (
+      runtime.status ===
+      RUNTIME_STATUS.THINKING
+    ) {
+      lastSpokenRef.current = null
+      return
+    }
+
+    if (
+      !voiceEnabled ||
+      runtime.status !==
+        RUNTIME_STATUS.DONE
+    ) {
+      return
+    }
+
+    const text = runtime.text
+
+    if (
+      !text ||
+      lastSpokenRef.current === text
+    ) {
+      return
+    }
+
+    lastSpokenRef.current = text
+    speakVoice(text)
+  }, [
+    runtime.status,
+    runtime.text,
+    voiceEnabled,
+    speakVoice,
+  ])
+
   const getWindowApi = () => {
     if (!window.jarvisWindow) {
       console.error(
@@ -735,11 +790,13 @@ function App() {
             executionContext
           }
           runtime={runtime}
+          voiceOutput={voiceOutput}
         />
       )}
 
       {showTreePrototype && (
         <TreePrototype
+          runtime={runtime}
           onOpenExecution={(
             context,
           ) => {
@@ -838,6 +895,7 @@ function App() {
         <QuickPip
           execution={execution}
           runtime={runtime}
+          pipMode={isPip}
         />
       </div>
     </main>

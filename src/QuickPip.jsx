@@ -19,6 +19,7 @@ import JarvisRuntimePanel from './JarvisRuntimePanel'
 export default function QuickPip({
   execution,
   runtime,
+  pipMode = false,
 }) {
   const {
     nextAction,
@@ -38,6 +39,37 @@ export default function QuickPip({
     ambientIndex,
     setAmbientIndex,
   ] = useState(0)
+
+  /*
+    PiP에서는 Qwen 답변이 계속 떠 있지 않도록
+    완료 알림을 잠깐 보여준 뒤 자동으로 닫는다.
+    (Command Center에서는 자동 dismiss 하지 않는다 — 전체 답변 유지.)
+  */
+  useEffect(() => {
+    if (
+      !pipMode ||
+      runtime.status !== 'done'
+    ) {
+      return undefined
+    }
+
+    const dismissTimer =
+      window.setTimeout(
+        () => runtime.dismiss(),
+        6000,
+      )
+
+    return () => {
+      window.clearTimeout(
+        dismissTimer,
+      )
+    }
+  }, [
+    pipMode,
+    runtime.status,
+    runtime.dismiss,
+    runtime,
+  ])
 
   const feedbackTimerRef =
     useRef(null)
@@ -181,6 +213,8 @@ export default function QuickPip({
         onApprove={runtime.approve}
         onReject={runtime.reject}
         onDismiss={runtime.dismiss}
+        variant="quiet"
+        pipMode={pipMode}
       >
       <div className="quick-pip-next-action">
         <div className="quick-pip-text-loop">

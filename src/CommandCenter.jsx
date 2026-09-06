@@ -27,6 +27,8 @@ import {
   Square,
   Target,
   Timer,
+  Volume2,
+  VolumeX,
   X,
   Zap,
 } from 'lucide-react'
@@ -78,6 +80,7 @@ export default function CommandCenter({
   execution,
   executionContext,
   runtime,
+  voiceOutput,
 }) {
   const rootRef = useRef(null)
 
@@ -87,46 +90,34 @@ export default function CommandCenter({
   const [prompt, setPrompt] =
     useState('')
 
+  const promptInputRef =
+    useRef(null)
+
   const voice = useVoiceCapture()
 
   /*
-    STEP 3 — 음성 전사 → 같은 runtime 경로로 자동 제출.
-    STT transcript는 여기서부터 text와 동일한 sendJarvisCommand를 탄다
-    (BridgeManager → Harness → Qwen → tools → Permission Gate).
-    resultSeq로 발화당 정확히 1회만 제출한다.
+    STEP 4 — 음성을 듣게 되면 입력란에 자동으로 채우고 포커스한다.
+    (자동 제출 대신 사용자가 확인·수정 후 Send/Enter로 보낸다.)
+    resultSeq로 발화당 정확히 1회만 채운다.
   */
-  const submittedVoiceSeq =
+  const filledVoiceSeq =
     useRef(0)
-
-  const runtimeBusy =
-    runtime.status === 'thinking' ||
-    runtime.status === 'tool-running' ||
-    runtime.status ===
-      'awaiting-confirmation'
 
   useEffect(() => {
     if (
       !voice.transcript ||
       voice.resultSeq ===
-        submittedVoiceSeq.current
+        filledVoiceSeq.current
     ) {
       return
     }
-    if (runtimeBusy) return
-    submittedVoiceSeq.current =
+    filledVoiceSeq.current =
       voice.resultSeq
-    runtime.submit(
-      voice.transcript,
-      runtime.projectId,
-      {
-        source: 'voice',
-      },
-    )
+    setPrompt(voice.transcript)
+    promptInputRef.current?.focus()
   }, [
     voice.transcript,
     voice.resultSeq,
-    runtimeBusy,
-    runtime,
   ])
 
   const handleJarvisSubmit = (
@@ -148,6 +139,12 @@ export default function CommandCenter({
 
     setPrompt('')
   }
+
+  const runtimeBusy =
+    runtime.status === 'thinking' ||
+    runtime.status === 'tool-running' ||
+    runtime.status ===
+      'awaiting-confirmation'
 
   /*
     Anime.js boundary:
@@ -511,6 +508,8 @@ export default function CommandCenter({
                 .join(' ')}
               onPointerDown={(event) => {
                 event.preventDefault()
+                // 진행 중인 음성 출력을 끊어 마이크로 다시 들리는 에코 방지
+                voiceOutput.stop()
                 voice.start()
               }}
               disabled={
@@ -529,6 +528,7 @@ export default function CommandCenter({
             </button>
 
             <input
+              ref={promptInputRef}
               className="jarvis-command-input"
               type="text"
               value={prompt}
@@ -558,13 +558,53 @@ export default function CommandCenter({
             >
               Send
             </button>
+
+            <button
+              type="button"
+              className={[
+                'jarvis-voice-mode-button',
+                voiceOutput.enabled
+                  ? 'is-active'
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              onClick={voiceOutput.toggle}
+              disabled={
+                voice.state !==
+                  VOICE_STATE.IDLE ||
+                runtimeBusy
+              }
+              title={
+                voiceOutput.enabled
+                  ? '음성 모드 끄기 — 응답을 소리로 듣지 않음'
+                  : '음성 모드 켜기 — Qwen 응답을 소리로 듣기'
+              }
+              aria-label="음성 모드 (응답을 소리로 듣기)"
+              aria-pressed={voiceOutput.enabled}
+            >
+              {voiceOutput.enabled ? (
+                <Volume2
+                  size={16}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                />
+              ) : (
+                <VolumeX
+                  size={16}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                />
+              )}
+            </button>
           </form>
 
           {(voice.state !==
             VOICE_STATE.IDLE ||
             voice.transcript ||
             voice.error ||
-            voice.statusLine) && (
+            voice.statusLine ||
+            voiceOutput.enabled) && (
             <div
               className={[
                 'jarvis-voice-status',
@@ -623,7 +663,9 @@ export default function CommandCenter({
                           : voice.state ===
                               VOICE_STATE.TRANSCRIBING
                             ? '전사 중…'
-                            : '')}
+                            : voiceOutput.enabled
+                              ? '음성 모드 — 응답도 소리로 들립니다'
+                              : '')}
                   </span>
                 </>
               )}
