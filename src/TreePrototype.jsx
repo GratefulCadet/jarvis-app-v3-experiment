@@ -32,9 +32,9 @@ import {
   X,
 } from 'lucide-react'
 
-import useTaskTree, {
+import useJarvisTree, {
   TASK_NODE_TYPES,
-} from './useTaskTree'
+} from './useJarvisTree'
 
 const SPACE_DOTS = [
   { x: '18%', y: '20%', z: -120, scale: 0.62 },
@@ -292,7 +292,7 @@ export default function TreePrototype({
   runtime,
 }) {
   const taskTree =
-    useTaskTree()
+    useJarvisTree()
 
   const popoverRef =
     useRef(null)
@@ -950,6 +950,19 @@ export default function TreePrototype({
           toneBlue,
       }}
     >
+      {taskTree.status === 'loading' && (
+        <div className="tree-prototype-status">
+          불러오는 중…
+        </div>
+      )}
+
+      {taskTree.status === 'error' && (
+        <div className="tree-prototype-status is-error">
+          {taskTree.error ||
+            '트리를 불러오지 못했습니다'}
+        </div>
+      )}
+
       <div
         className="tree-prototype-cursor-spotlight"
         aria-hidden="true"

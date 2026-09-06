@@ -72,6 +72,19 @@ contextBridge.exposeInMainWorld(
 )
 
 /*
+  JARVIS tree (read-only) — 실제 JARVIS state의 구조화 스냅샷.
+  Harness가 단일 원천(projects.md + tasks.md)에서 만든다.
+*/
+contextBridge.exposeInMainWorld(
+  'jarvisTree',
+  {
+    getSnapshot: () => {
+      return ipcRenderer.invoke('jarvis:tree-snapshot')
+    },
+  },
+)
+
+/*
   Voice (STEP 2) — 마이크 press/hold → STT 전용 API.
   Qwen으로 보내지 않는다: 여기서 끝나는 것은 transcript 표시다.
 */

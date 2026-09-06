@@ -164,6 +164,18 @@ class BridgeManager {
     }
   }
 
+  /*
+    read-only — 실제 JARVIS memory(projects.md + tasks.md) 기반 구조화 트리.
+    모델 호출 없이 Harness가 단일 원천에서 스냅샷을 만든다.
+  */
+  async treeSnapshot() {
+    try {
+      return await this._send({ type: 'tree_snapshot' })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
   async shutdown() {
     if (!this.isRunning) return { status: 'ok' }
     try {

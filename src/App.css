@@ -8580,3 +8580,29 @@
 
   overflow: auto;
 }
+
+/* 실제 JARVIS state 로드 상태 표시 */
+.tree-prototype-status {
+  position: absolute;
+  left: 50%;
+  top: 18px;
+  z-index: 30;
+
+  translate: -50% 0;
+
+  padding: 6px 14px;
+
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+
+  background: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.72);
+
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.tree-prototype-status.is-error {
+  border-color: rgba(255, 120, 120, 0.7);
+  color: #ffb3b3;
+}
