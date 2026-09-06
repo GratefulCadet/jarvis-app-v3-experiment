@@ -1,0 +1,32 @@
+{
+  "stt_model": "small",
+  "stt_device": "cpu",
+  "stt_compute_type": "int8",
+  "model_download_root": "C:\\Users\\USER\\Desktop\\AI_WORKSPACE\\projects\\local-jarvis\\assets\\stt",
+  "language": "ko",
+  "language_allow_auto": true,
+  "beam_size": 5,
+  "vad_filter": false,
+  "vad_filter_on_mic": false,
+  "initial_prompt": "현재 할 일, 프로젝트, 할 일 추가, 생성, 목록, Jarvis",
+  "recording": {
+    "default_duration_s": 8,
+    "target_sample_rate_hz": 44100,
+    "channels": 1,
+    "bit_depth": 16
+  },
+  "mic_selection": {
+    "prefer_hardware_mic": true,
+    "avoid_mapper_and_stereo_mix": true
+  },
+  "tts": {
+    "platform": "windows_system_speech",
+    "voice_name": "Microsoft Heami Desktop",
+    "rate": 1,
+    "enabled_by_default": true
+  },
+  "latency": {
+    "tts_cooldown_s": 1.2,
+    "max_command_turn_s": 120
+  }
+}
