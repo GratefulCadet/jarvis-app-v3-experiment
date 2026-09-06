@@ -41,10 +41,15 @@ export default function QuickPip({
   ] = useState(0)
 
   /*
-    PiP에서는 Qwen 답변이 계속 떠 있지 않도록
-    완료 알림을 잠깐 보여준 뒤 자동으로 닫는다.
-    (Command Center에서는 자동 dismiss 하지 않는다 — 전체 답변 유지.)
+    PiP에서는 조용한 Done chip을 ~6초 뒤 숨기지만,
+    공유 runtime 결과(runtime.dismiss)는 지우지 않는다 —
+    Command Center에서 전체 답변이 계속 남아 있도록.
+
+    hide PiP completion UI ⊥ clear shared runtime result
   */
+  const [completionHidden, setCompletionHidden] =
+    useState(false)
+
   useEffect(() => {
     if (
       !pipMode ||
@@ -53,23 +58,23 @@ export default function QuickPip({
       return undefined
     }
 
-    const dismissTimer =
-      window.setTimeout(
-        () => runtime.dismiss(),
-        6000,
-      )
+    // 이전에 숨겼던 상태를 먼저 해제(show)한 뒤 6초 후 다시 숨긴다.
+    // 모든 setState는 timeout 안에서 실행되어 effect 본문의
+    // 동기 setState를 피한다 (react-hooks/set-state-in-effect).
+    const showTimer = window.setTimeout(
+      () => setCompletionHidden(false),
+      0,
+    )
+    const hideTimer = window.setTimeout(
+      () => setCompletionHidden(true),
+      6000,
+    )
 
     return () => {
-      window.clearTimeout(
-        dismissTimer,
-      )
+      window.clearTimeout(showTimer)
+      window.clearTimeout(hideTimer)
     }
-  }, [
-    pipMode,
-    runtime.status,
-    runtime.dismiss,
-    runtime,
-  ])
+  }, [pipMode, runtime.status])
 
   const feedbackTimerRef =
     useRef(null)
@@ -215,6 +220,7 @@ export default function QuickPip({
         onDismiss={runtime.dismiss}
         variant="quiet"
         pipMode={pipMode}
+        hideDone={completionHidden}
       >
       <div className="quick-pip-next-action">
         <div className="quick-pip-text-loop">

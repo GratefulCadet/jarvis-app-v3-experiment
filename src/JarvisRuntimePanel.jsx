@@ -28,6 +28,7 @@ export default function JarvisRuntimePanel({
   children,
   variant = 'full',
   pipMode = false,
+  hideDone = false,
 }) {
   const {
     status,
@@ -130,7 +131,10 @@ export default function JarvisRuntimePanel({
         않는다 (Command Center 자체 패널이 전체 답변을 보여준다).
       - 실제 PiP 상태에서는 답변 전체 대신 짧은 완료 알림만 보여준다.
     */
-    if (variant === 'quiet' && !pipMode) {
+    if (
+      variant === 'quiet' &&
+      (hideDone || !pipMode)
+    ) {
       return children
     }
 
