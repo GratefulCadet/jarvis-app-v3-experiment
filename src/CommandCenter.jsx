@@ -113,7 +113,27 @@ export default function CommandCenter({
     }
     filledVoiceSeq.current =
       voice.resultSeq
-    setPrompt(voice.transcript)
+
+    /*
+      기존 입력을 지우지 않는다:
+      - 입력이 비어 있으면 transcript로 채우고
+      - 이미 텍스트가 있으면 한 칸 띄워 이어 붙인다.
+    */
+    setPrompt((current) => {
+      const existing = current.trim()
+      const addition =
+        voice.transcript.trim()
+
+      if (!existing) {
+        return addition
+      }
+
+      if (!addition) {
+        return current
+      }
+
+      return `${existing} ${addition}`
+    })
     promptInputRef.current?.focus()
   }, [
     voice.transcript,
