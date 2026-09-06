@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -87,6 +88,46 @@ export default function CommandCenter({
     useState('')
 
   const voice = useVoiceCapture()
+
+  /*
+    STEP 3 — 음성 전사 → 같은 runtime 경로로 자동 제출.
+    STT transcript는 여기서부터 text와 동일한 sendJarvisCommand를 탄다
+    (BridgeManager → Harness → Qwen → tools → Permission Gate).
+    resultSeq로 발화당 정확히 1회만 제출한다.
+  */
+  const submittedVoiceSeq =
+    useRef(0)
+
+  const runtimeBusy =
+    runtime.status === 'thinking' ||
+    runtime.status === 'tool-running' ||
+    runtime.status ===
+      'awaiting-confirmation'
+
+  useEffect(() => {
+    if (
+      !voice.transcript ||
+      voice.resultSeq ===
+        submittedVoiceSeq.current
+    ) {
+      return
+    }
+    if (runtimeBusy) return
+    submittedVoiceSeq.current =
+      voice.resultSeq
+    runtime.submit(
+      voice.transcript,
+      runtime.projectId,
+      {
+        source: 'voice',
+      },
+    )
+  }, [
+    voice.transcript,
+    voice.resultSeq,
+    runtimeBusy,
+    runtime,
+  ])
 
   const handleJarvisSubmit = (
     event,
@@ -474,7 +515,8 @@ export default function CommandCenter({
               }}
               disabled={
                 voice.state ===
-                  VOICE_STATE.TRANSCRIBING
+                  VOICE_STATE.TRANSCRIBING ||
+                runtimeBusy
               }
               title="마이크로 말하기 — 누르고 있는 동안 녹음, 떼면 전사"
               aria-label="마이크로 말하기 (누르고 있는 동안 녹음)"

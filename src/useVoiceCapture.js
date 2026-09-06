@@ -47,6 +47,7 @@ export function useVoiceCapture() {
   const [statusLine, setStatusLine] = useState('')
   const [error, setError] = useState(null)
   const [deviceName, setDeviceName] = useState('')
+  const [resultSeq, setResultSeq] = useState(0) // 발화당 1회 증가 — 자동 제출용
   const stateRef = useRef(state)
   const activeRef = useRef(false)
   const discardRef = useRef(false)
@@ -70,6 +71,7 @@ export function useVoiceCapture() {
         setStatusLine('아무 소리도 들리지 않았습니다.')
       } else {
         setTranscript(res.text || '')
+        setResultSeq((v) => v + 1)
         setStatusLine('')
         const dev = res.record && res.record.device
         if (dev && dev.name) setDeviceName(dev.name)
@@ -198,6 +200,7 @@ export function useVoiceCapture() {
     statusLine,
     error,
     deviceName,
+    resultSeq,
     start,
     stop,
     cancel,

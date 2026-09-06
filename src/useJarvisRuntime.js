@@ -108,7 +108,8 @@ const runtimeReducer = (state, event) => {
         tracePath: null,
       }
       if (event.text) {
-        next = pushTimeline(next, { kind: 'user', label: 'USER', detail: event.text })
+        const sourceLabel = event.source === 'voice' ? 'VOICE' : 'USER'
+        next = pushTimeline(next, { kind: 'user', label: sourceLabel, detail: event.text })
       }
       return next
     }
@@ -228,7 +229,7 @@ export default function useJarvisRuntime() {
     stateRef.current = state
   }, [state])
 
-  const submit = useCallback(async (text, projectId) => {
+  const submit = useCallback(async (text, projectId, options) => {
     const api = getRuntimeApi()
     if (!api) {
       dispatch({ type: RUNTIME_EVENT.ERROR, error: 'jarvisRuntime API를 찾을 수 없습니다. Electron에서 실행 중인지 확인하세요.' })
@@ -236,7 +237,11 @@ export default function useJarvisRuntime() {
     }
     const trimmed = typeof text === 'string' ? text.trim() : ''
     if (!trimmed) return
-    dispatch({ type: RUNTIME_EVENT.SUBMIT, text: trimmed })
+    dispatch({
+      type: RUNTIME_EVENT.SUBMIT,
+      text: trimmed,
+      source: options && options.source === 'voice' ? 'voice' : 'text',
+    })
     const response = await api.chat(trimmed, projectId || DEFAULT_PROJECT)
 
     if (!response || response.status === 'error') {
