@@ -70,3 +70,46 @@ contextBridge.exposeInMainWorld(
     },
   },
 )
+
+/*
+  Voice (STEP 2) — 마이크 press/hold → STT 전용 API.
+  Qwen으로 보내지 않는다: 여기서 끝나는 것은 transcript 표시다.
+*/
+contextBridge.exposeInMainWorld(
+  'jarvisVoice',
+  {
+    ping: () => {
+      return ipcRenderer.invoke('voice:ping')
+    },
+
+    status: () => {
+      return ipcRenderer.invoke('voice:status')
+    },
+
+    recordStart: (deviceIndex) => {
+      return ipcRenderer.invoke(
+        'voice:record-start',
+        {
+          deviceIndex,
+        },
+      )
+    },
+
+    recordStop: () => {
+      return ipcRenderer.invoke('voice:record-stop')
+    },
+
+    recordCancel: () => {
+      return ipcRenderer.invoke('voice:record-cancel')
+    },
+
+    transcribeFile: (filePath) => {
+      return ipcRenderer.invoke(
+        'voice:transcribe-file',
+        {
+          path: filePath,
+        },
+      )
+    },
+  },
+)

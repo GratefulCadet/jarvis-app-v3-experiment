@@ -225,10 +225,13 @@ def select_input_device(device_index: Optional[int] = None) -> Dict[str, Any]:
     prefer_hardware = bool(CONFIG.get("mic_selection", {}).get("prefer_hardware_mic", True))
     avoid_mapper = bool(CONFIG.get("mic_selection", {}).get("avoid_mapper_and_stereo_mix", True))
 
+    # Windows 의사 장치(가상 캡처)는 실제 마이크가 있을 때 피한다
+    WRAPPER_KEYWORDS = ("사운드 매퍼", "주 사운드 캡처", "stereo input", "스테레오 믹스")
+
     def score(d: Dict[str, Any]) -> tuple[int, int]:
         name = str(d["name"]).lower()
         low_score = 0 if prefer_hardware else 1
-        if avoid_mapper and ("사운드 매퍼" in name or "stereo input" in name or "스테레오 믹스" in name):
+        if avoid_mapper and any(kw in name for kw in WRAPPER_KEYWORDS):
             low_score += 1
         return (low_score, -int(d["max_input_channels"]))
 
@@ -242,53 +245,169 @@ def select_input_device(device_index: Optional[int] = None) -> Dict[str, Any]:
     return inputs[0]
 
 
-def record_audio(
+# ---- press/release mic recorder ------------------------------------
+# PTT: record_start → (사용자가 말함) → record_stop → (조용하면 silent,
+# 아니면 즉시 전사). 모델은 이미 boot에서 로드되어 있으므로 utterance마다
+# 다시 로드하지 않는다. 실패 시에만 디버그 WAV를 보존한다(data/voice/debug,
+# gitignore). 정상 동작에서는 임시 WAV를 정리한다.
+
+_rec: Dict[str, Any] = {}  # stream, blocks, samplerate, device, t0
+DEBUG_DIR = Path(__file__).resolve().parents[1] / "data" / "voice" / "debug"
+
+
+def _audio_cb(indata: np.ndarray, frames: int, time_info: Any, status: Any) -> None:
+    if _rec.get("stream") is not None:
+        if status:
+            log(f"audio callback status: {status}")
+        _rec.setdefault("blocks", []).append(indata.copy())
+
+
+def record_start(
     *,
-    duration_s: float,
     device_index: Optional[int] = None,
     samplerate: Optional[int] = None,
 ) -> Dict[str, Any]:
-    dev = select_input_device(device_index=device_index)
-    sr = int(samplerate) if samplerate is not None else int(dev["default_samplerate"])
-    frames = int(round(sr * duration_s))
+    if sd is None:
+        return {"ok": False, "error": "sounddevice 미설치 — 마이크 녹음 불가"}
+    if _rec.get("stream") is not None:
+        return {"ok": False, "error": "이미 녹음 중입니다 — record_stop 먼저 호출"}
     try:
-        audio = sd.rec(frames, samplerate=sr, channels=1, dtype="float32", device=int(dev["index"]))
-        sd.wait()
+        dev = select_input_device(device_index=device_index)
+        sr = int(samplerate) if samplerate is not None else int(dev["default_samplerate"])
+        stream = sd.InputStream(
+            samplerate=sr,
+            channels=1,
+            dtype="float32",
+            device=int(dev["index"]),
+            callback=_audio_cb,
+        )
+        stream.start()
     except Exception as exc:
-        return {"ok": False, "error": f"mic record failed: {exc}", "device": dev}
+        return {"ok": False, "error": f"recording start failed: {exc}"}
+    _rec.update({"stream": stream, "blocks": [], "samplerate": sr, "device": dev, "t0": time.time()})
+    return {"ok": True, "device": dev, "samplerate": sr}
+
+
+def _save_debug_wav(tmp: Path) -> Optional[str]:
+    try:
+        DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        target = DEBUG_DIR / f"stt_debug_{ts}_{os.getpid()}.wav"
+        tmp.replace(target)
+        return str(target)
+    except Exception as exc:
+        log(f"debug wav 보존 실패: {exc}")
+        return None
+
+
+def record_stop(
+    *,
+    transcribe: bool = True,
+    language: Optional[str] = None,
+    beam_size: Optional[int] = None,
+    vad_filter: Optional[bool] = None,
+    initial_prompt: Optional[str] = None,
+) -> Dict[str, Any]:
+    state = _rec
+    if state.get("stream") is None:
+        return {"ok": False, "error": "녹음 중이 아닙니다 — record_start 먼저 호출"}
+    stream = state["stream"]
+    sr = int(state["samplerate"])
+    dev = state["device"]
+    t0 = float(state.get("t0", time.time()))
+    blocks: List[np.ndarray] = state.get("blocks", [])
+    _rec.clear()  # 먼저 비워서 재진입/중복 stop 방지
+
+    try:
+        stream.stop()
+        stream.close()
+    except Exception as exc:
+        log(f"stream close warning: {exc}")
+
+    if blocks:
+        audio = np.concatenate(blocks) if len(blocks) > 1 else blocks[0]
+        audio = audio.astype(np.float32).reshape(-1)
+    else:
+        audio = np.zeros(0, dtype=np.float32)
+
+    dur_s = round(float(audio.shape[0]) / sr, 3) if audio.size else 0.0
     rms = float(np.sqrt(np.mean(audio**2))) if audio.size else 0.0
     peak = float(np.max(np.abs(audio))) if audio.size else 0.0
-    return {
-        "ok": True,
-        "samples": int(audio.shape[0]),
-        "samplerate": sr,
+    rec_metrics: Dict[str, Any] = {
         "device": dev,
+        "samplerate": sr,
+        "duration_s": dur_s,
         "rms": round(rms, 6),
         "peak": round(peak, 4),
-        "duration_s": round(audio.shape[0] / sr, 3),
+        "held_seconds": round(time.time() - t0, 3),
     }
 
+    # 무음 판정: 짧거나, 피크/에너지가 문턱 아래면 NO COMMAND
+    rec_cfg = CONFIG.get("recording", {})
+    min_speech_s = float(rec_cfg.get("min_speech_seconds", 0.25))
+    rms_thr = float(rec_cfg.get("silence_rms_threshold", 0.004))
+    peak_thr = float(rec_cfg.get("silence_peak_threshold", 0.02))
+    if audio.size == 0 or dur_s < min_speech_s or peak < peak_thr or rms < rms_thr:
+        return {
+            "ok": True,
+            "silent": True,
+            "text": "",
+            "record": rec_metrics,
+            "note": "silent recording — no command generated",
+        }
 
-def record_to_wav(
+    if not transcribe:
+        return {"ok": True, "silent": False, "text": "", "record": rec_metrics}
+
+    # 임시 WAV로 변환 후 전사 (정상: 삭제, 실패: 디버그 보존)
+    tmp = Path(tempfile.mktemp(suffix=".wav"))
+    try:
+        write_int16_wav(tmp, normalize_audio(audio), sr)
+        res = transcribe_file(
+            tmp,
+            language=language,
+            beam_size=beam_size,
+            vad_filter=vad_filter,
+            initial_prompt=initial_prompt,
+            normalize=False,
+        )
+    except Exception as exc:
+        res = {"ok": False, "error": f"transcribe failed: {exc}"}
+    if res.get("ok"):
+        tmp.unlink(missing_ok=True)
+        return {**res, "silent": False, "record": rec_metrics}
+    debug_path = _save_debug_wav(tmp)
+    return {"ok": False, **res, "record": rec_metrics, "debug_wav": debug_path}
+
+
+def record_cancel() -> Dict[str, Any]:
+    state = _rec
+    if state.get("stream") is None:
+        return {"ok": False, "error": "녹음 중이 아닙니다"}
+    stream = state["stream"]
+    _rec.clear()
+    try:
+        stream.stop()
+        stream.close()
+    except Exception as exc:
+        log(f"stream close warning on cancel: {exc}")
+    return {"ok": True, "note": "recording cancelled — no transcription"}
+
+
+def record_fixed(
     *,
     duration_s: float,
-    path: Optional[Path] = None,
     device_index: Optional[int] = None,
     samplerate: Optional[int] = None,
+    language: Optional[str] = None,
+    beam_size: Optional[int] = None,
+    vad_filter: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    rec = record_audio(duration_s=duration_s, device_index=device_index, samplerate=samplerate)
-    if not rec["ok"]:
-        return rec
-    target = path or Path(tempfile.mktemp(suffix=".wav"))
-    audio = sd.rec(int(round(rec["samplerate"] * duration_s)),
-                   samplerate=rec["samplerate"],
-                   channels=1,
-                   dtype="float32",
-                   device=int(select_input_device(device_index=device_index)["index"]))
-    sd.wait()
-    write_int16_wav(target, normalize_audio(audio.astype(np.float32)), rec["samplerate"])
-    return {"ok": True, "wav": str(target), "record": rec, "note": "temporary recording; clean up after use"}
-
+    started = record_start(device_index=device_index, samplerate=samplerate)
+    if not started.get("ok"):
+        return {"ok": False, "error": started.get("error", "record_start 실패")}
+    time.sleep(float(duration_s))
+    return record_stop(language=language, beam_size=beam_size, vad_filter=vad_filter)
 
 # ---- worker protocol ------------------------------------------------
 # STDOUT = JSONL protocol only.
@@ -367,21 +486,34 @@ def run_worker() -> int:
                     normalize=req.get("normalize", True),
                 )
                 emit({"type": "transcript_verbose", "id": req.get("id"), **result})
-            elif kind == "record_audio":
-                rec = record_audio(
-                    duration_s=req.get("duration_s", float(CONFIG.get("recording", {}).get("default_duration_s", 8))),
+            elif kind == "record_start":
+                started = record_start(
                     device_index=req.get("device_index"),
                     samplerate=req.get("samplerate"),
                 )
-                emit({"type": "record_result", "id": req.get("id"), **rec})
-            elif kind == "record_to_wav":
-                rec = record_to_wav(
+                emit({"type": "recording_started", "id": req.get("id"), **started})
+            elif kind == "record_stop":
+                result = record_stop(
+                    transcribe=req.get("transcribe", True),
+                    language=req.get("language"),
+                    beam_size=req.get("beam_size"),
+                    vad_filter=req.get("vad_filter"),
+                    initial_prompt=req.get("initial_prompt"),
+                )
+                emit({"type": "recording_result", "id": req.get("id"), **result})
+            elif kind == "record_cancel":
+                cancelled = record_cancel()
+                emit({"type": "recording_cancelled", "id": req.get("id"), **cancelled})
+            elif kind == "record_fixed":
+                result = record_fixed(
                     duration_s=req.get("duration_s", float(CONFIG.get("recording", {}).get("default_duration_s", 8))),
-                    path=Path(req["path"]) if "path" in req else None,
                     device_index=req.get("device_index"),
                     samplerate=req.get("samplerate"),
+                    language=req.get("language"),
+                    beam_size=req.get("beam_size"),
+                    vad_filter=req.get("vad_filter"),
                 )
-                emit({"type": "record_to_wav_result", "id": req.get("id"), **rec})
+                emit({"type": "recording_result", "id": req.get("id"), **result})
             elif kind == "list_input_devices":
                 emit({"type": "list_input_devices_result", "id": req.get("id"), "devices": list_input_devices()})
             elif kind == "select_input_device":
@@ -411,9 +543,10 @@ def main() -> int:
     if "--help" in sys.argv:
         print("STT worker protocol:\n"
               "  transcribe_file   {type, path, id?, language?, beam_size?, vad_filter?, initial_prompt?, normalize?}\n"
-              "  transcribe_file_verbose (same, plus detailed segments)\n"
-              "  record_audio      {type, id?, duration_s?, device_index?, samplerate?}\n"
-              "  record_to_wav     {type, id?, duration_s?, path?, device_index?, samplerate?}\n"
+              "  record_start      {type, id?, device_index?, samplerate?}  → recording_started\n"
+              "  record_stop       {type, id?, transcribe?}                → recording_result\n"
+              "  record_cancel     {type, id?}                             → recording_cancelled\n"
+              "  record_fixed      {type, id?, duration_s?}                → recording_result (자동화/테스트용)\n"
               "  list_input_devices {type, id?}\n"
               "  select_input_device {type, id?, device_index?}\n"
               "  ping              {type, id?}\n"

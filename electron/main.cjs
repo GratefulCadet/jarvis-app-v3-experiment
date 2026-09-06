@@ -266,3 +266,15 @@ registerBridgeIpc({
   app,
   windowGetter: () => mainWindow,
 })
+
+/*
+  Voice worker bridge (STEP 2) — 별도 Python 프로세스(stt_worker.py)를 관리.
+  Qwen/Harness와 분리되어 있어 음성 실패가 text runtime을 깨지 않는다.
+*/
+const { registerVoiceIpc } = require('./voice-ipc.cjs')
+
+registerVoiceIpc({
+  ipcMain,
+  app,
+  windowGetter: () => mainWindow,
+})

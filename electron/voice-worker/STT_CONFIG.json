@@ -11,9 +11,13 @@
   "initial_prompt": "현재 할 일, 프로젝트, 할 일 추가, 생성, 목록, Jarvis",
   "recording": {
     "default_duration_s": 8,
+    "max_recording_seconds": 20,
     "target_sample_rate_hz": 44100,
     "channels": 1,
-    "bit_depth": 16
+    "bit_depth": 16,
+    "min_speech_seconds": 0.25,
+    "silence_rms_threshold": 0.004,
+    "silence_peak_threshold": 0.02
   },
   "mic_selection": {
     "prefer_hardware_mic": true,

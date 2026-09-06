@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Circle,
   ListChecks,
+  Mic,
   Pause,
   Play,
   Plus,
@@ -32,6 +33,11 @@ import {
 import ActivityTimeline from './ActivityTimeline'
 import JarvisRuntimePanel from './JarvisRuntimePanel'
 import SevenSegmentTime from './SevenSegmentTime'
+
+import {
+  useVoiceCapture,
+  VOICE_STATE,
+} from './useVoiceCapture'
 
 import {
   TIMER_PRESETS_MINUTES,
@@ -79,6 +85,8 @@ export default function CommandCenter({
 
   const [prompt, setPrompt] =
     useState('')
+
+  const voice = useVoiceCapture()
 
   const handleJarvisSubmit = (
     event,
@@ -441,6 +449,43 @@ export default function CommandCenter({
             className="jarvis-command-form"
             onSubmit={handleJarvisSubmit}
           >
+            <button
+              type="button"
+              className={[
+                'jarvis-mic-button',
+                voice.state ===
+                  VOICE_STATE.LISTENING
+                  ? 'is-listening'
+                  : '',
+                voice.state ===
+                  VOICE_STATE.STARTING
+                  ? 'is-starting'
+                  : '',
+                voice.state ===
+                  VOICE_STATE.TRANSCRIBING
+                  ? 'is-busy'
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              onPointerDown={(event) => {
+                event.preventDefault()
+                voice.start()
+              }}
+              disabled={
+                voice.state ===
+                  VOICE_STATE.TRANSCRIBING
+              }
+              title="마이크로 말하기 — 누르고 있는 동안 녹음, 떼면 전사"
+              aria-label="마이크로 말하기 (누르고 있는 동안 녹음)"
+            >
+              <Mic
+                size={14}
+                strokeWidth={2}
+                aria-hidden="true"
+              />
+            </button>
+
             <input
               className="jarvis-command-input"
               type="text"
@@ -472,6 +517,76 @@ export default function CommandCenter({
               Send
             </button>
           </form>
+
+          {(voice.state !==
+            VOICE_STATE.IDLE ||
+            voice.transcript ||
+            voice.error ||
+            voice.statusLine) && (
+            <div
+              className={[
+                'jarvis-voice-status',
+                voice.error
+                  ? 'is-error'
+                  : '',
+                voice.state ===
+                  VOICE_STATE.LISTENING
+                  ? 'is-listening'
+                  : '',
+                voice.state ===
+                  VOICE_STATE.TRANSCRIBING
+                  ? 'is-busy'
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {voice.error ? (
+                <>
+                  <span className="jarvis-voice-status-label">
+                    VOICE ERROR
+                  </span>
+                  <span>{voice.error}</span>
+                </>
+              ) : voice.transcript ? (
+                <>
+                  <span className="jarvis-voice-status-label">
+                    들음
+                  </span>
+                  <span className="jarvis-voice-transcript">
+                    “{voice.transcript}”
+                  </span>
+                  {voice.deviceName && (
+                    <span className="jarvis-voice-device">
+                      {voice.deviceName}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  {(voice.state ===
+                    VOICE_STATE.LISTENING ||
+                    voice.state ===
+                      VOICE_STATE.STARTING) && (
+                    <span className="jarvis-voice-pulse" />
+                  )}
+                  <span>
+                    {voice.statusLine ||
+                      (voice.state ===
+                        VOICE_STATE.LISTENING
+                        ? '듣는 중…'
+                        : voice.state ===
+                            VOICE_STATE.STARTING
+                          ? '음성 준비 중…'
+                          : voice.state ===
+                              VOICE_STATE.TRANSCRIBING
+                            ? '전사 중…'
+                            : '')}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
 
           <JarvisRuntimePanel
             runtime={runtime}
