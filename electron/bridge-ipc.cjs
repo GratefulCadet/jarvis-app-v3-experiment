@@ -78,6 +78,10 @@ function registerBridgeIpc({ ipcMain, app }) {
     return manager.treeSnapshot()
   })
 
+  ipcMain.handle('jarvis:pages-snapshot', async () => {
+    return manager.pagesSnapshot()
+  })
+
   app.on('will-quit', () => {
     manager.stop()
   })

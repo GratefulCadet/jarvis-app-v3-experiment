@@ -85,6 +85,19 @@ contextBridge.exposeInMainWorld(
 )
 
 /*
+  JARVIS knowledge pages (read-only) — Markdown 페이지의 재귀 계층.
+  PageStore(<memory_dir>/pages)가 단일 원천; bridge pages_snapshot.
+*/
+contextBridge.exposeInMainWorld(
+  'jarvisPages',
+  {
+    getSnapshot: () => {
+      return ipcRenderer.invoke('jarvis:pages-snapshot')
+    },
+  },
+)
+
+/*
   Voice (STEP 2) — 마이크 press/hold → STT 전용 API.
   Qwen으로 보내지 않는다: 여기서 끝나는 것은 transcript 표시다.
 */

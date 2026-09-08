@@ -36,6 +36,8 @@ import useJarvisTree, {
   TASK_NODE_TYPES,
 } from './useJarvisTree'
 
+import useJarvisPages from './useJarvisPages'
+
 const SPACE_DOTS = [
   { x: '18%', y: '20%', z: -120, scale: 0.62 },
   { x: '77%', y: '18%', z: -40, scale: 0.84 },
@@ -294,6 +296,17 @@ export default function TreePrototype({
   const taskTree =
     useJarvisTree()
 
+  const knowledgePages =
+    useJarvisPages()
+
+  /*
+    Knowledge pages 펼침 상태 — 기본은 모두 펼침, Set에 있으면 접힘.
+  */
+  const [
+    collapsedPageIds,
+    setCollapsedPageIds,
+  ] = useState(() => new Set())
+
   const popoverRef =
     useRef(null)
 
@@ -546,6 +559,69 @@ export default function TreePrototype({
           .includes(query)
       )
     })
+
+  /*
+    Knowledge 페이지 행 — 기본 모두 펼침, Set에 있으면 접힘.
+    읽기 전용 milestone이라 label 클릭도 펼침/접힘 토글이다 (페이지 탐색은 다음 단계).
+  */
+  const buildPageRows = (
+    pageNode,
+    depth,
+  ) => {
+    const hasChildren =
+      (pageNode.children?.length ??
+        0) > 0
+
+    const expanded =
+      hasChildren &&
+      !collapsedPageIds.has(
+        pageNode.id,
+      )
+
+    const rows = [
+      {
+        node: pageNode,
+        depth,
+        expanded,
+        hasChildren,
+        parentIds: [],
+      },
+    ]
+
+    if (expanded) {
+      for (const child of
+        pageNode.children) {
+        rows.push(
+          ...buildPageRows(
+            child,
+            depth + 1,
+          ),
+        )
+      }
+    }
+
+    return rows
+  }
+
+  const togglePageExpanded = (
+    pageId,
+  ) => {
+    setCollapsedPageIds(
+      (previous) => {
+        const next = new Set(
+          previous,
+        )
+
+        if (next.has(pageId)) {
+          next.delete(pageId)
+        } else {
+          next.add(pageId)
+        }
+
+        return next
+      },
+    )
+  }
 
   /*
     접이식 트리 행 계산.
@@ -1546,6 +1622,59 @@ export default function TreePrototype({
               toggleExpanded
             }
           />
+
+          {knowledgePages.status ===
+            'loading' && (
+            <div className="tree-prototype-knowledge-status">
+              Knowledge 불러오는 중…
+            </div>
+          )}
+
+          {knowledgePages.status ===
+            'error' && (
+            <div className="tree-prototype-knowledge-status is-error">
+              {knowledgePages.error ||
+                'Knowledge를 불러오지 못했습니다'}
+            </div>
+          )}
+
+          {knowledgePages.status ===
+            'ready' && (
+            <div className="tree-prototype-overview-knowledge">
+              <div className="tree-prototype-knowledge-title">
+                KNOWLEDGE
+                {knowledgePages.scratch && (
+                  <span className="tree-prototype-knowledge-scratch">
+                    SCRATCH
+                  </span>
+                )}
+              </div>
+
+              {knowledgePages.pages.length ===
+                0 ? (
+                <div className="tree-prototype-knowledge-status">
+                  페이지 없음
+                </div>
+              ) : (
+                <TreeMapRows
+                  rows={knowledgePages.pages.flatMap(
+                    (page) =>
+                      buildPageRows(
+                        page,
+                        0,
+                      ),
+                  )}
+                  currentNodeId={null}
+                  goToNode={
+                    togglePageExpanded
+                  }
+                  onToggleExpanded={
+                    togglePageExpanded
+                  }
+                />
+              )}
+            </div>
+          )}
         </div>
       </aside>
 

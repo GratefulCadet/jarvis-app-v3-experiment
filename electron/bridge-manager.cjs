@@ -176,6 +176,18 @@ class BridgeManager {
     }
   }
 
+  /*
+    read-only — Knowledge Markdown pages의 재귀 트리. PageStore가 단일 원천
+    (<memory_dir>/pages)에서 스냅샷을 만든다. 모델 호출 없음.
+  */
+  async pagesSnapshot() {
+    try {
+      return await this._send({ type: 'pages_snapshot' })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
   async shutdown() {
     if (!this.isRunning) return { status: 'ok' }
     try {
