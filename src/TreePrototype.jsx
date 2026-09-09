@@ -149,10 +149,14 @@ const createDraft = (node) => ({
 /*
   FILES 섹션 행 — bridge files_snapshot의 평탄 entry를 TreeMapRows shape으로.
   blocked(민감 차단) 항목은 이름만 노출(내용 없음)하고 접두어로 표시한다.
+
+  노드 id는 stable FileRef identity(`file:<f-...>`)를 우선 쓴다(§11) — 파일이
+  rename/move돼도 reconciliation이 성공하면 같은 노드 identity가 유지되고
+  React 키도 안정적이다. identity 없는 entry(스캔 전/미등록)는 경로 fallback.
 */
 const makeFileRow = (entry) => ({
   node: {
-    id: `file:${entry.path}`,
+    id: entry.id ? `file:${entry.id}` : `file:${entry.path}`,
     label: entry.type === 'blocked' ? `${entry.name} (차단됨)` : entry.name,
     children: [],
   },
