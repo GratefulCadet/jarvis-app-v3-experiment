@@ -206,6 +206,24 @@ class BridgeManager {
     }
   }
 
+  /*
+    deterministic canonical write — SYSTEM MAP Complete/Reopen.
+    Direct user action → TaskStore.set_done via harness_bridge update_task.
+    No LLM, no Permission Gate — TaskStore is the single writer.
+  */
+  async updateTask(projectId, taskId, done) {
+    try {
+      return await this._send({
+        type: 'update_task',
+        project_id: projectId,
+        task_id: taskId,
+        done,
+      })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
   async shutdown() {
     if (!this.isRunning) return { status: 'ok' }
     try {

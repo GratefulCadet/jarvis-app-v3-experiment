@@ -736,6 +736,10 @@ export default function TreePrototype({
 
   const [addBusy, setAddBusy] = useState(false)
 
+  const [toggleError, setToggleError] = useState(null)
+
+  const [toggleBusy, setToggleBusy] = useState(false)
+
   useEffect(() => {
     if (!activePopover) {
       return undefined
@@ -2229,13 +2233,29 @@ export default function TreePrototype({
 
                 <button
                   type="button"
-                  onClick={() =>
-                    taskTree.toggleComplete(
-                      node.id,
-                    )
-                  }
+                  disabled={toggleBusy}
+                  onClick={async () => {
+                    if (toggleBusy) return
+                    setToggleBusy(true)
+                    setToggleError(null)
+                    try {
+                      const result = await taskTree.toggleComplete(node.id)
+                      if (!result || !result.ok) {
+                        setToggleError(result?.error || 'Task 상태 변경에 실패했습니다')
+                      }
+                    } catch (exception) {
+                      setToggleError(String(exception?.message || exception))
+                    } finally {
+                      setToggleBusy(false)
+                    }
+                  }}
                 >
-                  {node.complete ? (
+                  {toggleBusy ? (
+                    <Circle
+                      size={12}
+                      aria-hidden="true"
+                    />
+                  ) : node.complete ? (
                     <Check
                       size={12}
                       aria-hidden="true"
@@ -2247,9 +2267,7 @@ export default function TreePrototype({
                     />
                   )}
 
-                  {node.complete
-                    ? 'DONE'
-                    : 'MARK'}
+                  {toggleBusy ? '처리 중…' : node.complete ? 'DONE' : 'MARK'}
                 </button>
 
                 <button
@@ -2269,6 +2287,12 @@ export default function TreePrototype({
                   DELETE
                 </button>
               </div>
+
+              {toggleError && (
+                <div className="tree-prototype-add-error" role="alert">
+                  {toggleError}
+                </div>
+              )}
             </motion.form>
           )}
 

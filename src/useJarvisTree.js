@@ -16,7 +16,7 @@ import {
   - project.children = Tasks    (type: 'task',   id = t-xxx)
   - task.complete  = done 여부   (status: done | open)
 
-  Write 수렴 (이 마일스톤): Add Task만 canonical TaskStore 경로로 연결.
+  Write 수렴: Add Task + Complete/Reopen canonical TaskStore 경로로 연결.
   Edit/Delete는 아직 renderer-local (후속 마일스톤 대상).
 
   현재 실제 JARVIS 데이터에는 Goal / Next Action 계층이 없다 — Project → Task만
@@ -232,6 +232,48 @@ export default function useJarvisTree() {
     return { ok: true, task: response.task }
   }, [fetchSnapshot])
 
+  const setTaskDone = useCallback(async ({ projectId, taskId, done }) => {
+    const api = window.jarvisTree
+    if (!api?.updateTask) {
+      return { ok: false, error: 'jarvisTree.updateTask API 없음 — Electron을 재시작하세요.' }
+    }
+    const p = typeof projectId === 'string' ? projectId.trim() : ''
+    const tid = typeof taskId === 'string' ? taskId.trim() : ''
+    if (!p) return { ok: false, error: 'project_id가 비어 있습니다' }
+    if (!tid) return { ok: false, error: 'task_id가 비어 있습니다' }
+    if (typeof done !== 'boolean') return { ok: false, error: 'done은 boolean이어야 합니다' }
+    const response = await api.updateTask(p, tid, done)
+    if (!response || response.status !== 'ok' || !response.task) {
+      return { ok: false, error: response?.error || 'Task 상태 변경에 실패했습니다' }
+    }
+    // 성공 — canonical state에서 fresh snapshot으로 UI 갱신 (수동 패치 금지)
+    await fetchSnapshot()
+    return { ok: true, task: response.task }
+  }, [fetchSnapshot])
+
+  const toggleComplete = useCallback(async (nodeId) => {
+    const found = findNodeAndPath(root, nodeId)
+    if (!found) return { ok: false, error: '노드를 찾을 수 없습니다' }
+    const { node, path } = found
+    if (node.type !== 'task') {
+      // non-task toggles remain renderer-local
+      setRoot((current) =>
+        updateNodeById(current, nodeId, (n) => ({
+          ...n,
+          complete: !n.complete,
+        })),
+      )
+      return { ok: true, local: true }
+    }
+    // Resolve owning project
+    let projectId = null
+    for (let i = path.length - 1; i >= 0; i -= 1) {
+      if (path[i].type === 'project') { projectId = path[i].id; break }
+    }
+    if (!projectId) return { ok: false, error: '프로젝트를 찾을 수 없습니다' }
+    return setTaskDone({ projectId, taskId: node.id, done: !node.complete })
+  }, [root, setTaskDone])
+
   const api = useMemo(
     () => ({
       find(nodeId) {
@@ -307,14 +349,17 @@ export default function useJarvisTree() {
         )
       },
 
-      toggleComplete(nodeId) {
+      // legacy renderer-only toggle retained as `toggleCompleteLocal` for non-task types if needed
+      toggleCompleteLocal(nodeId) {
         setRoot((current) =>
-          updateNodeById(current, nodeId, (node) => ({
-            ...node,
-            complete: !node.complete,
+          updateNodeById(current, nodeId, (n) => ({
+            ...n,
+            complete: !n.complete,
           })),
         )
       },
+
+      toggleComplete, // canonical task toggle (setTaskDone + refresh)
 
       deleteNode(nodeId) {
         if (nodeId === root.id) return root.id
@@ -328,9 +373,10 @@ export default function useJarvisTree() {
       },
 
       createTask,
+      setTaskDone,
       refresh,
     }),
-    [root, createTask, refresh],
+    [root, createTask, setTaskDone, refresh, toggleComplete],
   )
 
   return {

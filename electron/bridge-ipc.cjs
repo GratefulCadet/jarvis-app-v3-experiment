@@ -99,6 +99,22 @@ function registerBridgeIpc({ ipcMain, app }) {
     )
   })
 
+  ipcMain.handle('jarvis:update-task', async (_event, payload) => {
+    const projectId = payload?.projectId
+    const taskId = payload?.taskId
+    const done = payload?.done
+    if (typeof projectId !== 'string' || !projectId.trim()) {
+      return { type: 'response', status: 'error', error: 'project_id가 비어 있습니다' }
+    }
+    if (typeof taskId !== 'string' || !taskId.trim()) {
+      return { type: 'response', status: 'error', error: 'task_id가 비어 있습니다' }
+    }
+    if (typeof done !== 'boolean') {
+      return { type: 'response', status: 'error', error: 'done은 boolean이어야 합니다' }
+    }
+    return manager.updateTask(projectId.trim(), taskId.trim(), done)
+  })
+
   app.on('will-quit', () => {
     manager.stop()
   })

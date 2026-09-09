@@ -89,6 +89,14 @@ contextBridge.exposeInMainWorld(
         reason,
       })
     },
+
+    updateTask: (projectId, taskId, done) => {
+      return ipcRenderer.invoke('jarvis:update-task', {
+        projectId,
+        taskId,
+        done,
+      })
+    },
   },
 )
 
