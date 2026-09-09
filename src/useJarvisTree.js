@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -15,8 +16,8 @@ import {
   - project.children = Tasks    (type: 'task',   id = t-xxx)
   - task.complete  = done 여부   (status: done | open)
 
-  편집(action)은 이 milestone에서는 in-memory로만 동작한다(저장소에 쓰지 않음).
-  향후 write 경로는 bridge에 Permission Gate가 붙은 tool(write)로 연결한다.
+  Write 수렴 (이 마일스톤): Add Task만 canonical TaskStore 경로로 연결.
+  Edit/Delete는 아직 renderer-local (후속 마일스톤 대상).
 
   현재 실제 JARVIS 데이터에는 Goal / Next Action 계층이 없다 — Project → Task만
   존재하므로, 트리는 root("JARVIS") → Project → Task 구조를 쓴다.
@@ -154,6 +155,42 @@ export default function useJarvisTree() {
       : 'jarvisTree API 없음 — Electron에서 실행 중인지 확인하세요.',
   )
 
+  const fetchSnapshot = useCallback(async () => {
+    const api = window.jarvisTree
+    if (!api?.getSnapshot) {
+      setStatus('error')
+      setError('jarvisTree API 없음 — Electron에서 실행 중인지 확인하세요.')
+      return { ok: false, error: 'jarvisTree API 없음' }
+    }
+    try {
+      const response = await api.getSnapshot()
+      if (
+        response?.status === 'ok' &&
+        Array.isArray(response.tree)
+      ) {
+        setRoot(buildRoot(response.tree))
+        setStatus('ready')
+        setError(null)
+        return { ok: true, tree: response.tree }
+      }
+      setStatus('error')
+      setError(
+        (response && response.error) ||
+          '트리 스냅샷을 불러오지 못했습니다.',
+      )
+      return { ok: false, error: response?.error || '트리 스냅샷 실패' }
+    } catch (exception) {
+      const message = String(
+        (exception &&
+          exception.message) ||
+          exception,
+      )
+      setStatus('error')
+      setError(message)
+      return { ok: false, error: message }
+    }
+  }, [])
+
   useEffect(() => {
     const api = window.jarvisTree
     if (!api) return undefined
@@ -161,40 +198,39 @@ export default function useJarvisTree() {
     let cancelled = false
 
     ;(async () => {
-      try {
-        const response = await api.getSnapshot()
-        if (cancelled) return
-        if (
-          response?.status === 'ok' &&
-          Array.isArray(response.tree)
-        ) {
-          setRoot(buildRoot(response.tree))
-          setStatus('ready')
-        } else {
-          setStatus('error')
-          setError(
-            (response && response.error) ||
-              '트리 스냅샷을 불러오지 못했습니다.',
-          )
-        }
-      } catch (exception) {
-        if (!cancelled) {
-          setStatus('error')
-          setError(
-            String(
-              (exception &&
-                exception.message) ||
-                exception,
-            ),
-          )
-        }
-      }
+      // 초기 로드 — fetchSnapshot이 상태까지 갱신한다
+      const snapshot = await fetchSnapshot()
+      if (cancelled) return
+      // fetchSnapshot already set state; nothing else
+      void snapshot
     })()
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [fetchSnapshot])
+
+  const refresh = useCallback(async () => {
+    return fetchSnapshot()
+  }, [fetchSnapshot])
+
+  const createTask = useCallback(async ({ projectId, title, reason }) => {
+    const api = window.jarvisTree
+    if (!api?.createTask) {
+      return { ok: false, error: 'jarvisTree.createTask API 없음 — Electron을 재시작하세요.' }
+    }
+    const p = typeof projectId === 'string' ? projectId.trim() : ''
+    const t = typeof title === 'string' ? title.trim() : ''
+    if (!p) return { ok: false, error: 'project_id가 비어 있습니다' }
+    if (!t) return { ok: false, error: 'title이 비어 있습니다' }
+    const response = await api.createTask(p, t, typeof reason === 'string' ? reason.trim() : reason)
+    if (!response || response.status !== 'ok' || !response.task) {
+      return { ok: false, error: response?.error || 'Task 생성에 실패했습니다' }
+    }
+    // 성공 — canonical state에서 fresh snapshot으로 UI 갱신 (수동 패치 금지)
+    await fetchSnapshot()
+    return { ok: true, task: response.task }
+  }, [fetchSnapshot])
 
   const api = useMemo(
     () => ({
@@ -206,6 +242,8 @@ export default function useJarvisTree() {
         return collectStats(node)
       },
 
+      // Renderer-local generic add (non-task types — Edit/Delete와 함께 후속 마일스톤에서 제거 예정)
+      // Task 타입의 Add는 canonical createTask를 사용해야 한다 — TreePrototype에서 분기한다.
       addChild(parentId, payload) {
         const label =
           typeof payload?.label === 'string'
@@ -288,8 +326,11 @@ export default function useJarvisTree() {
         )
         return parentId
       },
+
+      createTask,
+      refresh,
     }),
-    [root],
+    [root, createTask, refresh],
   )
 
   return {
@@ -297,6 +338,8 @@ export default function useJarvisTree() {
     status,
     error,
     rootStats: collectStats(root),
+    refresh,
+    createTask,
     ...api,
   }
 }

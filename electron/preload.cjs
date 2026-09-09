@@ -81,6 +81,14 @@ contextBridge.exposeInMainWorld(
     getSnapshot: () => {
       return ipcRenderer.invoke('jarvis:tree-snapshot')
     },
+
+    createTask: (projectId, title, reason) => {
+      return ipcRenderer.invoke('jarvis:create-task', {
+        projectId,
+        title,
+        reason,
+      })
+    },
   },
 )
 

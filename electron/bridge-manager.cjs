@@ -188,6 +188,24 @@ class BridgeManager {
     }
   }
 
+  /*
+    deterministic canonical write — SYSTEM MAP Add Task.
+    Direct user action (Tree UI) → TaskStore via harness_bridge create_task.
+    No LLM, no Permission Gate round-trip — TaskStore is the single writer.
+  */
+  async createTask(projectId, title, reason) {
+    try {
+      return await this._send({
+        type: 'create_task',
+        project_id: projectId,
+        title,
+        reason,
+      })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
   async shutdown() {
     if (!this.isRunning) return { status: 'ok' }
     try {

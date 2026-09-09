@@ -732,6 +732,10 @@ export default function TreePrototype({
     createAddDraft,
   )
 
+  const [addError, setAddError] = useState(null)
+
+  const [addBusy, setAddBusy] = useState(false)
+
   useEffect(() => {
     if (!activePopover) {
       return undefined
@@ -789,24 +793,85 @@ export default function TreePrototype({
     setActivePopover(null)
   }
 
-  const addChild = (event) => {
+  const addChild = async (event) => {
     event.preventDefault()
 
-    const nextNodeId =
-      taskTree.addChild(
-        node.id,
-        addDraft,
-      )
+    if (addBusy) return
 
-    if (!nextNodeId) {
+    const label =
+      typeof addDraft.label === 'string'
+        ? addDraft.label.trim()
+        : ''
+
+    if (!label) return
+
+    const normalizedType = TASK_NODE_TYPES.includes(addDraft.type)
+      ? addDraft.type
+      : 'task'
+
+    const reason =
+      typeof addDraft.description === 'string'
+        ? addDraft.description.trim()
+        : ''
+
+    // Non-task types remain renderer-local (후속 마일스톤에서 제거 예정)
+    if (normalizedType !== 'task') {
+      const nextNodeId = taskTree.addChild(node.id, addDraft)
+
+      if (!nextNodeId) return
+
+      setAddDraft(createAddDraft())
+      setAddError(null)
+      goToNode(nextNodeId)
       return
     }
 
-    setAddDraft(
-      createAddDraft(),
-    )
+    // Canonical Task path — explicit user action → deterministic TaskStore write
+    // Permission Gate 불필요: Qwen이 제안한 write가 아니라 사용자가 직접 누른 Add Task
+    const projectId = (() => {
+      if (node.type === 'project') return node.id
+      for (let i = path.length - 1; i >= 0; i -= 1) {
+        if (path[i].type === 'project') return path[i].id
+      }
+      return null
+    })()
 
-    goToNode(nextNodeId)
+    if (!projectId) {
+      setAddError('프로젝트를 선택한 뒤 Task를 추가하세요.')
+      return
+    }
+
+    setAddBusy(true)
+    setAddError(null)
+
+    try {
+      const result = await taskTree.createTask({
+        projectId,
+        title: label,
+        reason,
+      })
+
+      if (!result || !result.ok) {
+        setAddError(result?.error || 'Task 생성에 실패했습니다')
+        return
+      }
+
+      setAddDraft(createAddDraft())
+      setActivePopover(null)
+
+      setExpandedNodeIds((previous) => {
+        const next = new Set(previous)
+        next.add(projectId)
+        next.add(taskTree.root.id)
+        return next
+      })
+
+      goToNode(result.task.id)
+    } catch (exception) {
+      setAddError(String(exception?.message || exception))
+    } finally {
+      setAddBusy(false)
+    }
   }
 
   const deleteCurrentNode = () => {
@@ -2319,10 +2384,16 @@ export default function TreePrototype({
                   )}
                 </select>
 
-                <button type="submit">
-                  ADD
+                <button type="submit" disabled={addBusy}>
+                  {addBusy ? '저장 중…' : 'ADD'}
                 </button>
               </div>
+
+              {addError && (
+                <div className="tree-prototype-add-error" role="alert">
+                  {addError}
+                </div>
+              )}
             </motion.form>
           )}
         </AnimatePresence>

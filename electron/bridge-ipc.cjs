@@ -82,6 +82,23 @@ function registerBridgeIpc({ ipcMain, app }) {
     return manager.pagesSnapshot()
   })
 
+  ipcMain.handle('jarvis:create-task', async (_event, payload) => {
+    const projectId = payload?.projectId
+    const title = payload?.title
+    const reason = payload?.reason
+    if (typeof projectId !== 'string' || !projectId.trim()) {
+      return { type: 'response', status: 'error', error: 'project_id가 비어 있습니다' }
+    }
+    if (typeof title !== 'string' || !title.trim()) {
+      return { type: 'response', status: 'error', error: 'title이 비어 있습니다' }
+    }
+    return manager.createTask(
+      projectId.trim(),
+      title.trim(),
+      typeof reason === 'string' ? reason.trim() : reason,
+    )
+  })
+
   app.on('will-quit', () => {
     manager.stop()
   })
