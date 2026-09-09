@@ -269,6 +269,55 @@ class BridgeManager {
     }
   }
 
+  /*
+    deterministic canonical write — SYSTEM MAP Link to Project (RESOURCE LINK V1).
+    Direct user action → ProjectResources via harness_bridge link_project_file.
+    No LLM, no Permission Gate — ProjectResources is the single writer.
+    file_id는 FileRef identity(f-*)만 받는다 — 경로는 하드 거부.
+  */
+  async linkProjectFile(projectId, fileId, relation) {
+    try {
+      return await this._send({
+        type: 'link_project_file',
+        project_id: projectId,
+        file_id: fileId,
+        relation,
+      })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
+  /*
+    read-only — Project Resources (semantic projection).
+    locator는 읽을 때 FileRef에서 resolve — rename/move가 링크 재작성 없이 반영된다.
+  */
+  async listProjectResources(projectId) {
+    try {
+      return await this._send({
+        type: 'list_project_resources',
+        project_id: projectId,
+      })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
+  /*
+    deterministic metadata cleanup — unlink. JARVIS 메타데이터만 제거;
+    사용자 파일은 절대 건드리지 않는다.
+  */
+  async unlinkProjectFile(linkId) {
+    try {
+      return await this._send({
+        type: 'unlink_project_file',
+        link_id: linkId,
+      })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
   async shutdown() {
     if (!this.isRunning) return { status: 'ok' }
     try {

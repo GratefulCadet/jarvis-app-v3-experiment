@@ -50,6 +50,39 @@ const makeTaskNode = (task) => ({
   children: [],
 })
 
+/*
+  RESOURCE LINK V1 — Project Resources (semantic projection).
+
+  tree_snapshot의 resource_group → project_resource 하위를 그대로 매핑한다.
+  각 파일 노드는 bridge에서 채운 file 필드에 stable FileRef identity(f-*)를
+  실는다 — FILES 물리 뷰와 같은 canonical entity의 다른 뷰(§2)다. 렌더러가
+  링크를 만들거나 복제하지 않는다 — persisted ResourceLink만 보인다.
+*/
+const makeResourceFileNode = (fileNode) => ({
+  id: fileNode.id,
+  label: fileNode.title || fileNode.id,
+  eyebrow: 'FILE',
+  description:
+    fileNode.file?.relative_path || fileNode.file?.id || '',
+  type: 'project_resource',
+  complete: false,
+  fileId: fileNode.file?.id || null,
+  filePath: fileNode.file?.relative_path || null,
+  fileStatus: fileNode.file?.status || 'ok',
+  linkId: fileNode.link_id || null,
+  children: [],
+})
+
+const makeResourceGroupNode = (group) => ({
+  id: group.id,
+  label: group.title || group.id,
+  eyebrow: 'RESOURCES',
+  description: '',
+  type: 'resource_group',
+  complete: false,
+  children: (group.children || []).map(makeResourceFileNode),
+})
+
 const makeProjectNode = (project) => ({
   id: project.id,
   label: project.title || project.id,
@@ -57,7 +90,11 @@ const makeProjectNode = (project) => ({
   description: project.title ? project.id : '',
   type: 'project',
   complete: false,
-  children: (project.children || []).map(makeTaskNode),
+  children: (project.children || []).map((child) =>
+    child.type === 'resource_group'
+      ? makeResourceGroupNode(child)
+      : makeTaskNode(child),
+  ),
 })
 
 const buildRoot = (tree) => ({
@@ -284,6 +321,31 @@ export default function useJarvisTree() {
         return collectStats(node)
       },
 
+      /* RESOURCE LINK V1 (PART I) — files 뷰의 파일 노드에서 호출하는
+         deterministic canonical write. UI 선택값(project/file/relation)만
+         전달하고, 성공 시 canonical snapshot을 다시 읽어 UI를 갱신한다. */
+      async linkProjectFile({ projectId, fileId, relation }) {
+        const api = window.jarvisDiscovery
+        if (!api?.linkProjectFile) {
+          return { ok: false, error: 'jarvisDiscovery.linkProjectFile API 없음 — Electron을 재시작하세요.' }
+        }
+        const p = typeof projectId === 'string' ? projectId.trim() : ''
+        const f = typeof fileId === 'string' ? fileId.trim() : ''
+        if (!p) return { ok: false, error: 'project_id가 비어 있습니다' }
+        if (!f) return { ok: false, error: 'file_id(FileRef identity)가 비어 있습니다' }
+        const response = await api.linkProjectFile(
+          p,
+          f,
+          typeof relation === 'string' && relation.trim() ? relation.trim() : 'reference',
+        )
+        if (!response || response.status !== 'ok') {
+          return { ok: false, error: response?.error || '링크 생성에 실패했습니다' }
+        }
+        // 성공 — canonical state에서 fresh snapshot으로 UI 갱신 (수동 패치 금지)
+        await fetchSnapshot()
+        return { ok: true, created: response.created, link: response.link }
+      },
+
       // Renderer-local generic add (non-task types — Edit/Delete와 함께 후속 마일스톤에서 제거 예정)
       // Task 타입의 Add는 canonical createTask를 사용해야 한다 — TreePrototype에서 분기한다.
       addChild(parentId, payload) {
@@ -376,7 +438,7 @@ export default function useJarvisTree() {
       setTaskDone,
       refresh,
     }),
-    [root, createTask, setTaskDone, refresh, toggleComplete],
+    [root, createTask, setTaskDone, refresh, toggleComplete, fetchSnapshot],
   )
 
   return {

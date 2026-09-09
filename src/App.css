@@ -7238,6 +7238,59 @@
     );
 }
 
+/* RESOURCE LINK V1 — FILES 행의 Link to Project 버튼(hover에만 노출) */
+.tree-prototype-map-row-action {
+  appearance: none;
+
+  flex: 0 0 auto;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+
+  border: none;
+  border-radius: 5px;
+
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+
+  cursor: pointer;
+
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.tree-prototype-map-row:hover .tree-prototype-map-row-action {
+  opacity: 1;
+}
+
+.tree-prototype-map-row-action:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* Link popover의 대상 파일 표시 */
+.tree-prototype-link-file {
+  padding: 6px 8px;
+
+  border-radius: 6px;
+
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.75);
+
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tree-prototype-map-chevron {
   appearance: none;
 

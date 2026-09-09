@@ -138,6 +138,29 @@ contextBridge.exposeInMainWorld(
         depth,
       })
     },
+
+    /* RESOURCE LINK V1 — Project↔FileRef semantic links.
+       linkProjectFile: direct user action → deterministic canonical write.
+       file_id는 FileRef identity(f-*)만 — 경로는 bridge가 하드 거부한다. */
+    linkProjectFile: (projectId, fileId, relation) => {
+      return ipcRenderer.invoke('jarvis:link-project-file', {
+        projectId,
+        fileId,
+        relation,
+      })
+    },
+
+    listProjectResources: (projectId) => {
+      return ipcRenderer.invoke('jarvis:list-project-resources', {
+        projectId,
+      })
+    },
+
+    unlinkProjectFile: (linkId) => {
+      return ipcRenderer.invoke('jarvis:unlink-project-file', {
+        linkId,
+      })
+    },
   },
 )
 

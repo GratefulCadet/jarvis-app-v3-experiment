@@ -18,6 +18,7 @@ import {
   Circle,
   Crosshair,
   Home,
+  Link2,
   Map as MapIcon,
   Maximize2,
   Network,
@@ -158,6 +159,9 @@ const makeFileRow = (entry) => ({
   node: {
     id: entry.id ? `file:${entry.id}` : `file:${entry.path}`,
     label: entry.type === 'blocked' ? `${entry.name} (차단됨)` : entry.name,
+    // RESOURCE LINK V1 — stable FileRef identity만 링크 가능. 경로 fallback
+    // entry(스캔 전/미등록)는 fileId가 없어 링크 UI가 뜨지 않는다.
+    fileId: entry.id || null,
     children: [],
   },
   depth: entry.depth,
@@ -217,6 +221,8 @@ function TreeMapRows({
   currentNodeId,
   goToNode,
   onToggleExpanded,
+  renderRowAction,
+
 }) {
   return rows.map(
     ({
@@ -305,6 +311,8 @@ function TreeMapRows({
           >
             {node.label}
           </button>
+
+          {renderRowAction && renderRowAction(node)}
         </div>
       )
     },
@@ -761,6 +769,32 @@ export default function TreePrototype({
 
   const [addBusy, setAddBusy] = useState(false)
 
+  /* RESOURCE LINK V1 (PART I) — files 뷰 파일 노드 → Project 명시적 링크.
+     사용자가 Project·relation을 직접 고른다. 실패 시 오류만 보이고 트리는
+     그대로 — 성공 시 useJarvisTree.linkProjectFile이 canonical snapshot을
+     다시 읽어 Project Resources에 나타난다. */
+  const [linkDraft, setLinkDraft] = useState({
+    fileId: null,
+    fileLabel: '',
+    projectId: '',
+    relation: 'reference',
+  })
+
+  const [linkError, setLinkError] = useState(null)
+
+  const [linkBusy, setLinkBusy] = useState(false)
+
+  const openLinkPopover = (fileId, fileLabel) => {
+    setLinkDraft({
+      fileId,
+      fileLabel: fileLabel || '',
+      projectId: '',
+      relation: 'reference',
+    })
+    setLinkError(null)
+    setActivePopover('link')
+  }
+
   const [toggleError, setToggleError] = useState(null)
 
   const [toggleBusy, setToggleBusy] = useState(false)
@@ -900,6 +934,51 @@ export default function TreePrototype({
       setAddError(String(exception?.message || exception))
     } finally {
       setAddBusy(false)
+    }
+  }
+
+  /* RESOURCE LINK V1 — files 뷰 파일 행의 명시적 Link to Project.
+     fileId는 stable FileRef identity(f-*)만 — identity 없는 entry(미등록
+     스캔)는 링크 버튼 자체가 없다(bridge도 경로를 거부한다). */
+  const linkCurrentFile = async (event) => {
+    event.preventDefault()
+
+    if (linkBusy) return
+
+    if (!linkDraft.fileId) {
+      setLinkError('stable FileRef identity가 없어 링크할 수 없습니다.')
+      return
+    }
+
+    const projectId = typeof linkDraft.projectId === 'string'
+      ? linkDraft.projectId.trim()
+      : ''
+    if (!projectId) {
+      setLinkError('프로젝트를 선택하세요.')
+      return
+    }
+
+    setLinkBusy(true)
+    setLinkError(null)
+
+    try {
+      const result = await taskTree.linkProjectFile({
+        projectId,
+        fileId: linkDraft.fileId,
+        relation: linkDraft.relation,
+      })
+
+      if (!result || !result.ok) {
+        setLinkError(result?.error || '링크 생성에 실패했습니다')
+        return
+      }
+
+      setLinkDraft({ projectId: '', relation: 'reference' })
+      setActivePopover(null)
+    } catch (exception) {
+      setLinkError(String(exception?.message || exception))
+    } finally {
+      setLinkBusy(false)
     }
   }
 
@@ -1787,6 +1866,27 @@ export default function TreePrototype({
                 currentNodeId={null}
                 goToNode={() => {}}
                 onToggleExpanded={() => {}}
+                renderRowAction={(rowNode) =>
+                  rowNode.fileId && rowNode.id.startsWith('file:f-') ? (
+                    <button
+                      key={`${rowNode.id}-link`}
+                      type="button"
+                      className="tree-prototype-map-row-action"
+                      aria-label={`Link ${rowNode.label} to project`}
+                      title="Link to Project"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        openLinkPopover(rowNode.fileId, rowNode.label)
+                      }}
+                    >
+                      <Link2
+                        size={11}
+                        strokeWidth={2}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  ) : null
+                }
               />
             </div>
           )}
@@ -1915,6 +2015,45 @@ export default function TreePrototype({
               ? 'Unpin'
               : 'Pin'}
           </span>
+        </button>
+
+        <button
+          type="button"
+          aria-label="Link current file to project"
+          className={
+            activePopover === 'link'
+              ? 'is-active'
+              : ''
+          }
+          onClick={(event) => {
+            event.stopPropagation()
+
+            if (activePopover === 'link') {
+              setActivePopover(null)
+              return
+            }
+
+            // files 뷰의 파일 행에서 열린 초대 플로우 — fileId가 이미 채워져 있다.
+            // 그 외 위치에서의 수동 실행은 초대 상태를 리셋한다(placeholder 표시).
+            if (node.type === 'file' && node.fileId) {
+              openLinkPopover(node.fileId, node.label)
+            } else {
+              setLinkDraft({
+                fileId: null,
+                fileLabel: '',
+                projectId: '',
+                relation: 'reference',
+              })
+              setLinkError('FILES 뷰에서 파일 행의 링크 버튼을 먼저 눌러주세요.')
+              setActivePopover('link')
+            }
+          }}
+        >
+          <Link2
+            size={21}
+            aria-hidden="true"
+          />
+          <span>Link</span>
         </button>
 
         <button
@@ -2462,6 +2601,111 @@ export default function TreePrototype({
               {addError && (
                 <div className="tree-prototype-add-error" role="alert">
                   {addError}
+                </div>
+              )}
+            </motion.form>
+          )}
+
+          {/* RESOURCE LINK V1 — 파일 → Project 명시적 링크 (PART I).
+              사용자가 Project·relation을 직접 고른다. canonical write는
+              ProjectResources가 하고, 성공 시 snapshot 재조회로 UI 갱신. */}
+          {activePopover === 'link' && (
+            <motion.form
+              key="link-popover"
+              className="tree-prototype-popover tree-prototype-add-form"
+              initial={{
+                opacity: 0,
+                y: 12,
+                scale: 0.94,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                scale: 1,
+              }}
+              exit={{
+                opacity: 0,
+                y: 10,
+                scale: 0.96,
+              }}
+              transition={{
+                type: 'spring',
+                bounce: 0.08,
+                duration: 0.03,
+              }}
+              onSubmit={linkCurrentFile}
+            >
+              <div className="tree-prototype-editor-title">
+                <Link2
+                  size={12}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
+                LINK TO PROJECT
+              </div>
+
+              <div className="tree-prototype-link-file">
+                {linkDraft.fileId
+                  ? linkDraft.fileLabel || linkDraft.fileId
+                  : 'FILES 뷰에서 파일 행의 링크 버튼을 먼저 눌러주세요.'}
+              </div>
+
+              <select
+                value={linkDraft.projectId}
+                onChange={(event) =>
+                  setLinkDraft(
+                    (draft) => ({
+                      ...draft,
+                      projectId: event.target.value,
+                    }),
+                  )
+                }
+                aria-label="Target project"
+              >
+                <option value="">프로젝트 선택…</option>
+                {(taskTree.root.children || [])
+                  .filter((child) => child.type === 'project')
+                  .map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.label}
+                    </option>
+                  ))}
+              </select>
+
+              <select
+                value={linkDraft.relation}
+                onChange={(event) =>
+                  setLinkDraft(
+                    (draft) => ({
+                      ...draft,
+                      relation: event.target.value,
+                    }),
+                  )
+                }
+                aria-label="Relation"
+              >
+                <option value="reference">reference — 참조</option>
+                <option value="source">source — 출처</option>
+                <option value="result">result — 결과물</option>
+                <option value="resource">resource — 자원</option>
+              </select>
+
+              <div className="tree-prototype-editor-actions">
+                <button
+                  type="submit"
+                  disabled={
+                    linkBusy ||
+                    !linkDraft.fileId ||
+                    !linkDraft.projectId.trim()
+                  }
+                >
+                  {linkBusy ? '연결 중…' : 'LINK'}
+                </button>
+              </div>
+
+              {linkError && (
+                <div className="tree-prototype-add-error" role="alert">
+                  {linkError}
                 </div>
               )}
             </motion.form>

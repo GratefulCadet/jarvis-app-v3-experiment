@@ -151,6 +151,39 @@ function registerBridgeIpc({ ipcMain, app }) {
     return manager.filesSnapshot(root || undefined, relativePath || undefined, depth)
   })
 
+  ipcMain.handle('jarvis:link-project-file', async (_event, payload) => {
+    const projectId = payload?.projectId
+    const fileId = payload?.fileId
+    const relation = payload?.relation
+    if (typeof projectId !== 'string' || !projectId.trim()) {
+      return { type: 'response', status: 'error', error: 'project_id가 비어 있습니다' }
+    }
+    if (typeof fileId !== 'string' || !fileId.trim()) {
+      return { type: 'response', status: 'error', error: 'file_id(FileRef identity)가 비어 있습니다' }
+    }
+    return manager.linkProjectFile(
+      projectId.trim(),
+      fileId.trim(),
+      typeof relation === 'string' && relation.trim() ? relation.trim() : 'reference',
+    )
+  })
+
+  ipcMain.handle('jarvis:list-project-resources', async (_event, payload) => {
+    const projectId = payload?.projectId
+    if (typeof projectId !== 'string' || !projectId.trim()) {
+      return { type: 'response', status: 'error', error: 'project_id가 비어 있습니다' }
+    }
+    return manager.listProjectResources(projectId.trim())
+  })
+
+  ipcMain.handle('jarvis:unlink-project-file', async (_event, payload) => {
+    const linkId = payload?.linkId
+    if (typeof linkId !== 'string' || !linkId.trim()) {
+      return { type: 'response', status: 'error', error: 'link_id가 비어 있습니다' }
+    }
+    return manager.unlinkProjectFile(linkId.trim())
+  })
+
   app.on('will-quit', () => {
     manager.stop()
   })
