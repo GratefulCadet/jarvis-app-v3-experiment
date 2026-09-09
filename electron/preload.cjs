@@ -98,6 +98,32 @@ contextBridge.exposeInMainWorld(
 )
 
 /*
+  TTS — ElevenLabs (main holds xi-api-key, renderer sends only final text).
+  speak: final Qwen text only — never traces/tool JSON. Failure falls back
+  to local Web Speech in renderer (useVoiceOutput).
+*/
+contextBridge.exposeInMainWorld(
+  'jarvisTts',
+  {
+    speak: (text, options) => {
+      return ipcRenderer.invoke('tts:speak', {
+        text,
+        voiceId: options?.voiceId,
+        modelId: options?.modelId,
+      })
+    },
+
+    stop: () => {
+      return ipcRenderer.invoke('tts:stop')
+    },
+
+    status: () => {
+      return ipcRenderer.invoke('tts:status')
+    },
+  },
+)
+
+/*
   Voice (STEP 2) — 마이크 press/hold → STT 전용 API.
   Qwen으로 보내지 않는다: 여기서 끝나는 것은 transcript 표시다.
 */

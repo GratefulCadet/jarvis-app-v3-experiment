@@ -278,3 +278,14 @@ registerVoiceIpc({
   app,
   windowGetter: () => mainWindow,
 })
+
+/*
+  TTS bridge — ElevenLabs (main holds xi-api-key, renderer sends only text).
+  STT와 분리된 채널: 실패 시 renderer가 local Web Speech로 fallback.
+*/
+const { registerTtsIpc } = require('./tts-ipc.cjs')
+
+registerTtsIpc({
+  ipcMain,
+  app,
+})

@@ -1,0 +1,6 @@
+{
+  "provider": "elevenlabs",
+  "voice_id": "onwK4e9ZLuTAKqWW03F9",
+  "model_id": "eleven_flash_v2_5",
+  "output_format": "mp3_44100_128"
+}
