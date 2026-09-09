@@ -114,6 +114,34 @@ contextBridge.exposeInMainWorld(
 )
 
 /*
+  Context Discovery (read-only) — 프로젝트 나열/검색 + 도메인 통합 검색.
+  Discovery adapter가 canonical 원천(Task/Project/Page/File store)만 읽는다.
+*/
+contextBridge.exposeInMainWorld(
+  'jarvisDiscovery',
+  {
+    listProjects: () => {
+      return ipcRenderer.invoke('jarvis:discover-projects')
+    },
+
+    searchContext: (query, limit) => {
+      return ipcRenderer.invoke('jarvis:search-context', {
+        query,
+        limit,
+      })
+    },
+
+    filesSnapshot: (root, path, depth) => {
+      return ipcRenderer.invoke('jarvis:files-snapshot', {
+        root,
+        path,
+        depth,
+      })
+    },
+  },
+)
+
+/*
   TTS — ElevenLabs (main holds xi-api-key, renderer sends only final text).
   speak: final Qwen text only — never traces/tool JSON. Failure falls back
   to local Web Speech in renderer (useVoiceOutput).

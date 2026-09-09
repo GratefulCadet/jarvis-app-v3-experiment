@@ -224,6 +224,51 @@ class BridgeManager {
     }
   }
 
+  /*
+    read-only — Context Discovery: 전체 프로젝트 나열 (id·제목·task 수).
+    모델 호출 없음. Discovery adapter가 canonical 원천만 읽는다.
+  */
+  async discoverProjects() {
+    try {
+      return await this._send({ type: 'discover_projects' })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
+  /*
+    read-only — Context Discovery: Project/Task/Page/File 통합 검색.
+    모델 호출 없음. 각 결과는 자기 도메인의 canonical identity를 유지한다.
+  */
+  async searchContext(query, limit) {
+    try {
+      return await this._send({
+        type: 'search_context',
+        query,
+        limit,
+      })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
+  /*
+    read-only — 승인된 파일 루트의 경계 있는 트리 (SYSTEM MAP FILES).
+    모델 호출 없음. 루트가 없어도 status:ok + roots:[] (renderer가 상태 표시).
+  */
+  async filesSnapshot(root, relativePath, depth) {
+    try {
+      return await this._send({
+        type: 'files_snapshot',
+        root,
+        path: relativePath,
+        depth,
+      })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
   async shutdown() {
     if (!this.isRunning) return { status: 'ok' }
     try {

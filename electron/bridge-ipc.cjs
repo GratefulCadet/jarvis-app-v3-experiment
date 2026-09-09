@@ -115,6 +115,42 @@ function registerBridgeIpc({ ipcMain, app }) {
     return manager.updateTask(projectId.trim(), taskId.trim(), done)
   })
 
+  /*
+    Context Discovery + FILES (read-only) — renderer는 discovery 결과만 본다.
+    파일시스템 접근은 Harness FileStore 경계(승인 루트·민감 차단) 뒤에 있다.
+  */
+  ipcMain.handle('jarvis:discover-projects', async () => {
+    return manager.discoverProjects()
+  })
+
+  ipcMain.handle('jarvis:search-context', async (_event, payload) => {
+    const query = payload?.query
+    if (typeof query !== 'string' || !query.trim()) {
+      return { type: 'response', status: 'error', error: '검색어가 비어 있습니다' }
+    }
+    const limit = payload?.limit
+    return manager.searchContext(
+      query.trim(),
+      typeof limit === 'number' && limit > 0 ? Math.floor(limit) : undefined,
+    )
+  })
+
+  ipcMain.handle('jarvis:files-snapshot', async (_event, payload) => {
+    const root = payload?.root
+    const relativePath = payload?.path
+    const depth = payload?.depth
+    if (root !== undefined && root !== null && typeof root !== 'string') {
+      return { type: 'response', status: 'error', error: 'root는 문자열이어야 합니다' }
+    }
+    if (relativePath !== undefined && relativePath !== null && typeof relativePath !== 'string') {
+      return { type: 'response', status: 'error', error: 'path는 문자열이어야 합니다' }
+    }
+    if (depth !== undefined && depth !== null && typeof depth !== 'number') {
+      return { type: 'response', status: 'error', error: 'depth는 숫자여야 합니다' }
+    }
+    return manager.filesSnapshot(root || undefined, relativePath || undefined, depth)
+  })
+
   app.on('will-quit', () => {
     manager.stop()
   })

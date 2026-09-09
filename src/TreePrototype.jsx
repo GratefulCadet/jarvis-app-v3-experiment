@@ -38,6 +38,8 @@ import useJarvisTree, {
 
 import useJarvisPages from './useJarvisPages'
 
+import useJarvisFiles from './useJarvisFiles'
+
 const SPACE_DOTS = [
   { x: '18%', y: '20%', z: -120, scale: 0.62 },
   { x: '77%', y: '18%', z: -40, scale: 0.84 },
@@ -142,6 +144,22 @@ const createDraft = (node) => ({
   label: node.label,
   description: node.description,
   type: node.type,
+})
+
+/*
+  FILES 섹션 행 — bridge files_snapshot의 평탄 entry를 TreeMapRows shape으로.
+  blocked(민감 차단) 항목은 이름만 노출(내용 없음)하고 접두어로 표시한다.
+*/
+const makeFileRow = (entry) => ({
+  node: {
+    id: `file:${entry.path}`,
+    label: entry.type === 'blocked' ? `${entry.name} (차단됨)` : entry.name,
+    children: [],
+  },
+  depth: entry.depth,
+  expanded: false,
+  hasChildren: false,
+  parentIds: [],
 })
 
 const createAddDraft = () => ({
@@ -298,6 +316,9 @@ export default function TreePrototype({
 
   const knowledgePages =
     useJarvisPages()
+
+  const files =
+    useJarvisFiles()
 
   /*
     Knowledge pages 펼침 상태 — 기본은 모두 펼침, Set에 있으면 접힘.
@@ -1742,6 +1763,27 @@ export default function TreePrototype({
                   }
                 />
               )}
+            </div>
+          )}
+
+          {files.status === 'ready' &&
+            files.roots.length > 0 && (
+            <div className="tree-prototype-overview-knowledge">
+              <div className="tree-prototype-knowledge-title">
+                FILES
+              </div>
+
+              <TreeMapRows
+                rows={files.sections.flatMap(
+                  (section) =>
+                    section.entries.map(
+                      makeFileRow,
+                    ),
+                )}
+                currentNodeId={null}
+                goToNode={() => {}}
+                onToggleExpanded={() => {}}
+              />
             </div>
           )}
         </div>
