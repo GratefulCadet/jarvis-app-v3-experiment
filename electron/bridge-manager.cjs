@@ -318,6 +318,45 @@ class BridgeManager {
     }
   }
 
+  /*
+    PROJECT PRIMARY WORKSPACE V1 — Project → 논리 WorkspaceRoot 관계.
+    setProjectWorkspace: explicit user action → deterministic canonical write.
+    root_id는 논리 identity만 — 절대 경로는 bridge가 하드 거부한다(§7).
+  */
+  async setProjectWorkspace(projectId, rootId) {
+    try {
+      return await this._send({
+        type: 'set_project_workspace',
+        project_id: projectId,
+        root_id: rootId,
+      })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
+  async getProjectWorkspace(projectId) {
+    try {
+      return await this._send({
+        type: 'get_project_workspace',
+        project_id: projectId,
+      })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
+  async clearProjectWorkspace(projectId) {
+    try {
+      return await this._send({
+        type: 'clear_project_workspace',
+        project_id: projectId,
+      })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
   async shutdown() {
     if (!this.isRunning) return { status: 'ok' }
     try {

@@ -161,6 +161,28 @@ contextBridge.exposeInMainWorld(
         linkId,
       })
     },
+
+    /* PROJECT PRIMARY WORKSPACE V1 — Project → 논리 WorkspaceRoot 관계.
+       setProjectWorkspace: explicit user action → deterministic write.
+       root_id는 논리 identity만 — 경로는 bridge가 거부한다. */
+    setProjectWorkspace: (projectId, rootId) => {
+      return ipcRenderer.invoke('jarvis:set-project-workspace', {
+        projectId,
+        rootId,
+      })
+    },
+
+    getProjectWorkspace: (projectId) => {
+      return ipcRenderer.invoke('jarvis:get-project-workspace', {
+        projectId,
+      })
+    },
+
+    clearProjectWorkspace: (projectId) => {
+      return ipcRenderer.invoke('jarvis:clear-project-workspace', {
+        projectId,
+      })
+    },
   },
 )
 

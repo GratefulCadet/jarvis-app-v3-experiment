@@ -784,6 +784,15 @@ export default function TreePrototype({
 
   const [linkBusy, setLinkBusy] = useState(false)
 
+  /* PROJECT PRIMARY WORKSPACE V1 — Project → 논리 WorkspaceRoot 관계.
+     Project 노드에서 dock의 Workspace 버튼으로 연다. root는 files.roots의
+     승인 루트만 선택 가능 — 절대 경로는 처음부터 입력할 수 없다(§7). */
+  const [wsDraft, setWsDraft] = useState({ rootId: '' })
+
+  const [wsError, setWsError] = useState(null)
+
+  const [wsBusy, setWsBusy] = useState(false)
+
   const openLinkPopover = (fileId, fileLabel) => {
     setLinkDraft({
       fileId,
@@ -979,6 +988,70 @@ export default function TreePrototype({
       setLinkError(String(exception?.message || exception))
     } finally {
       setLinkBusy(false)
+    }
+  }
+
+  /* PROJECT PRIMARY WORKSPACE V1 — Project 노드의 명시적 workspace 설정.
+     canonical write 후 snapshot 재조회가 Workspace 노드를 갱신한다.
+     Workspace 노드에서는 해제(clear)도 가능하다 — 메타데이터만 제거. */
+  const saveWorkspace = async (event) => {
+    event.preventDefault()
+
+    if (wsBusy) return
+
+    if (node.type !== 'project') {
+      setWsError('Project 노드에서만 설정할 수 있습니다.')
+      return
+    }
+
+    const rootId = typeof wsDraft.rootId === 'string' ? wsDraft.rootId.trim() : ''
+    if (!rootId) {
+      setWsError('workspace 루트를 선택하세요.')
+      return
+    }
+
+    setWsBusy(true)
+    setWsError(null)
+
+    try {
+      const result = await taskTree.setProjectWorkspace({
+        projectId: node.id,
+        rootId,
+      })
+
+      if (!result || !result.ok) {
+        setWsError(result?.error || 'workspace 설정에 실패했습니다')
+        return
+      }
+
+      setWsDraft({ rootId: '' })
+      setActivePopover(null)
+    } catch (exception) {
+      setWsError(String(exception?.message || exception))
+    } finally {
+      setWsBusy(false)
+    }
+  }
+
+  const clearWorkspace = async () => {
+    if (wsBusy) return
+    if (node.type !== 'project') return
+
+    setWsBusy(true)
+    setWsError(null)
+
+    try {
+      const result = await taskTree.clearProjectWorkspace({ projectId: node.id })
+      if (!result || !result.ok) {
+        setWsError(result?.error || 'workspace 해제에 실패했습니다')
+        return
+      }
+      setWsDraft({ rootId: '' })
+      setActivePopover(null)
+    } catch (exception) {
+      setWsError(String(exception?.message || exception))
+    } finally {
+      setWsBusy(false)
     }
   }
 
@@ -2058,6 +2131,43 @@ export default function TreePrototype({
 
         <button
           type="button"
+          aria-label="Set primary workspace"
+          className={
+            activePopover === 'workspace'
+              ? 'is-active'
+              : ''
+          }
+          disabled={node.type !== 'project'}
+          onClick={(event) => {
+            event.stopPropagation()
+
+            // 현재 관계를 draft에 반영해 자연스럽게 재선택/해제 가능하게 한다
+            const currentWs =
+              node.type === 'project'
+                ? (node.children || []).find(
+                    (child) => child.type === 'workspace_group',
+                  )
+                : null
+            const currentRoot = currentWs?.children?.[0]?.rootId || ''
+
+            setWsDraft({ rootId: currentRoot })
+            setWsError(null)
+            setActivePopover(
+              activePopover === 'workspace'
+                ? null
+                : 'workspace',
+            )
+          }}
+        >
+          <MapIcon
+            size={21}
+            aria-hidden="true"
+          />
+          <span>WS</span>
+        </button>
+
+        <button
+          type="button"
           aria-label="Search system map"
           className={
             activePopover ===
@@ -2706,6 +2816,96 @@ export default function TreePrototype({
               {linkError && (
                 <div className="tree-prototype-add-error" role="alert">
                   {linkError}
+                </div>
+              )}
+            </motion.form>
+          )}
+
+          {/* PROJECT PRIMARY WORKSPACE V1 — Project → 논리 root 관계 설정.
+              승인된 루트(files.roots)만 선택 가능. 기존 관계가 있으면 미리
+              선택되고, 해제 버튼으로 메타데이터만 제거할 수 있다. */}
+          {activePopover === 'workspace' && (
+            <motion.form
+              key="workspace-popover"
+              className="tree-prototype-popover tree-prototype-add-form"
+              initial={{
+                opacity: 0,
+                y: 12,
+                scale: 0.94,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                scale: 1,
+              }}
+              exit={{
+                opacity: 0,
+                y: 10,
+                scale: 0.96,
+              }}
+              transition={{
+                type: 'spring',
+                bounce: 0.08,
+                duration: 0.03,
+              }}
+              onSubmit={saveWorkspace}
+            >
+              <div className="tree-prototype-editor-title">
+                <MapIcon
+                  size={12}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
+                PRIMARY WORKSPACE
+              </div>
+
+              {node.type === 'project' && (
+                <>
+                  <select
+                    value={wsDraft.rootId}
+                    onChange={(event) =>
+                      setWsDraft(
+                        (draft) => ({
+                          ...draft,
+                          rootId: event.target.value,
+                        }),
+                      )
+                    }
+                    aria-label="Primary workspace root"
+                  >
+                    <option value="">루트 선택…</option>
+                    {files.roots.map((rootName) => (
+                      <option key={rootName} value={rootName}>
+                        {rootName}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="tree-prototype-editor-actions">
+                    <button
+                      type="submit"
+                      disabled={
+                        wsBusy ||
+                        !wsDraft.rootId.trim()
+                      }
+                    >
+                      {wsBusy ? '처리 중…' : 'SET'}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={wsBusy}
+                      onClick={clearWorkspace}
+                    >
+                      CLEAR
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {wsError && (
+                <div className="tree-prototype-add-error" role="alert">
+                  {wsError}
                 </div>
               )}
             </motion.form>

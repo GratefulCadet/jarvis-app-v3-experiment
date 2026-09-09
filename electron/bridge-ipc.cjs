@@ -184,6 +184,34 @@ function registerBridgeIpc({ ipcMain, app }) {
     return manager.unlinkProjectFile(linkId.trim())
   })
 
+  ipcMain.handle('jarvis:set-project-workspace', async (_event, payload) => {
+    const projectId = payload?.projectId
+    const rootId = payload?.rootId
+    if (typeof projectId !== 'string' || !projectId.trim()) {
+      return { type: 'response', status: 'error', error: 'project_id가 비어 있습니다' }
+    }
+    if (typeof rootId !== 'string' || !rootId.trim()) {
+      return { type: 'response', status: 'error', error: 'root_id(논리 root identity)가 비어 있습니다' }
+    }
+    return manager.setProjectWorkspace(projectId.trim(), rootId.trim())
+  })
+
+  ipcMain.handle('jarvis:get-project-workspace', async (_event, payload) => {
+    const projectId = payload?.projectId
+    if (typeof projectId !== 'string' || !projectId.trim()) {
+      return { type: 'response', status: 'error', error: 'project_id가 비어 있습니다' }
+    }
+    return manager.getProjectWorkspace(projectId.trim())
+  })
+
+  ipcMain.handle('jarvis:clear-project-workspace', async (_event, payload) => {
+    const projectId = payload?.projectId
+    if (typeof projectId !== 'string' || !projectId.trim()) {
+      return { type: 'response', status: 'error', error: 'project_id가 비어 있습니다' }
+    }
+    return manager.clearProjectWorkspace(projectId.trim())
+  })
+
   app.on('will-quit', () => {
     manager.stop()
   })

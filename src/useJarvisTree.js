@@ -83,6 +83,38 @@ const makeResourceGroupNode = (group) => ({
   children: (group.children || []).map(makeResourceFileNode),
 })
 
+/*
+  PROJECT PRIMARY WORKSPACE V1 — Project 아래 semantic Workspace 노드.
+
+  WorkspaceRoot를 논리 root_id로 참조하는 projection일 뿐 중복 Project가
+  아니다(§4). available:false여도 노드는 유지한다 — 관계는 남아 있고 이
+  디바이스에서만 물리 경로가 없다는 뜻이다(PART D).
+*/
+const makeWorkspaceNode = (wsNode) => ({
+  id: wsNode.id,
+  label: wsNode.title || wsNode.root_id || wsNode.id,
+  eyebrow: 'WORKSPACE',
+  description:
+    wsNode.available
+      ? 'primary workspace — 사용 가능'
+      : `primary workspace — 이 디바이스에서 사용 불가${wsNode.reason ? ` (${wsNode.reason})` : ''}`,
+  type: 'project_workspace',
+  complete: false,
+  rootId: wsNode.root_id || null,
+  available: Boolean(wsNode.available),
+  children: [],
+})
+
+const makeWorkspaceGroupNode = (group) => ({
+  id: group.id,
+  label: group.title || group.id,
+  eyebrow: 'WORKSPACE',
+  description: '',
+  type: 'workspace_group',
+  complete: false,
+  children: (group.children || []).map(makeWorkspaceNode),
+})
+
 const makeProjectNode = (project) => ({
   id: project.id,
   label: project.title || project.id,
@@ -90,11 +122,11 @@ const makeProjectNode = (project) => ({
   description: project.title ? project.id : '',
   type: 'project',
   complete: false,
-  children: (project.children || []).map((child) =>
-    child.type === 'resource_group'
-      ? makeResourceGroupNode(child)
-      : makeTaskNode(child),
-  ),
+  children: (project.children || []).map((child) => {
+    if (child.type === 'resource_group') return makeResourceGroupNode(child)
+    if (child.type === 'workspace_group') return makeWorkspaceGroupNode(child)
+    return makeTaskNode(child)
+  }),
 })
 
 const buildRoot = (tree) => ({
@@ -344,6 +376,41 @@ export default function useJarvisTree() {
         // 성공 — canonical state에서 fresh snapshot으로 UI 갱신 (수동 패치 금지)
         await fetchSnapshot()
         return { ok: true, created: response.created, link: response.link }
+      },
+
+      /* PROJECT PRIMARY WORKSPACE V1 — Project → 논리 WorkspaceRoot 관계 설정.
+         explicit user action → deterministic write. 성공 시 canonical
+         snapshot 재조회로 Workspace 노드를 갱신한다. */
+      async setProjectWorkspace({ projectId, rootId }) {
+        const api = window.jarvisDiscovery
+        if (!api?.setProjectWorkspace) {
+          return { ok: false, error: 'jarvisDiscovery.setProjectWorkspace API 없음 — Electron을 재시작하세요.' }
+        }
+        const p = typeof projectId === 'string' ? projectId.trim() : ''
+        const r = typeof rootId === 'string' ? rootId.trim() : ''
+        if (!p) return { ok: false, error: 'project_id가 비어 있습니다' }
+        if (!r) return { ok: false, error: 'root_id가 비어 있습니다' }
+        const response = await api.setProjectWorkspace(p, r)
+        if (!response || response.status !== 'ok') {
+          return { ok: false, error: response?.error || 'workspace 설정에 실패했습니다' }
+        }
+        await fetchSnapshot()
+        return { ok: true, workspace: response.workspace, updated: response.updated }
+      },
+
+      async clearProjectWorkspace({ projectId }) {
+        const api = window.jarvisDiscovery
+        if (!api?.clearProjectWorkspace) {
+          return { ok: false, error: 'jarvisDiscovery.clearProjectWorkspace API 없음 — Electron을 재시작하세요.' }
+        }
+        const p = typeof projectId === 'string' ? projectId.trim() : ''
+        if (!p) return { ok: false, error: 'project_id가 비어 있습니다' }
+        const response = await api.clearProjectWorkspace(p)
+        if (!response || response.status !== 'ok') {
+          return { ok: false, error: response?.error || 'workspace 해제에 실패했습니다' }
+        }
+        await fetchSnapshot()
+        return { ok: true, removed: response.removed }
       },
 
       // Renderer-local generic add (non-task types — Edit/Delete와 함께 후속 마일스톤에서 제거 예정)
