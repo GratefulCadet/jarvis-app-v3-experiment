@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -45,6 +44,8 @@ import useJarvisTree, {
 import useJarvisPages from './useJarvisPages'
 
 import useJarvisFiles from './useJarvisFiles'
+
+import useWorkspaceRoots from './useWorkspaceRoots'
 
 const SPACE_DOTS = [
   { x: '18%', y: '20%', z: -120, scale: 0.62 },
@@ -789,48 +790,13 @@ export default function TreePrototype({
 
   const [linkBusy, setLinkBusy] = useState(false)
 
-  /* PROJECT PRIMARY WORKSPACE V1 — Project → 논리 WorkspaceRoot 관계.
-     Project 노드에서 dock의 Workspace 버튼으로 연다. root는 files.roots의
-     승인 루트만 선택 가능 — 절대 경로는 처음부터 입력할 수 없다(§7). */
+  /* PROJECT PRIMARY WORKSPACE V1 — Project → 논리 WorkspaceRoot 관계. */
   const [wsDraft, setWsDraft] = useState({ rootId: '' })
-
   const [wsError, setWsError] = useState(null)
-
   const [wsBusy, setWsBusy] = useState(false)
 
-  /* WORKSPACE REGISTRATION + FOLDER PICKER V1 — minimal Settings surface. */
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [wsRoots, setWsRoots] = useState([])
-  const [wsRootsError, setWsRootsError] = useState(null)
-  const [wsRootsBusy, setWsRootsBusy] = useState(false)
-  const [editingRootId, setEditingRootId] = useState(null)
-  const [editingName, setEditingName] = useState('')
-
-  const loadWorkspaceRoots = useCallback(async () => {
-    setWsRootsError(null)
-    const result = await taskTree.listWorkspaceRoots()
-    if (!result || !result.ok) {
-      setWsRootsError(result?.error || 'workspace 목록을 불러오지 못했습니다')
-      return
-    }
-    setWsRoots(result.roots || [])
-  }, [taskTree])
-
-  useEffect(() => {
-    if (!settingsOpen) return undefined
-    let cancelled = false
-    ;(async () => {
-      const result = await taskTree.listWorkspaceRoots()
-      if (cancelled) return
-      if (!result || !result.ok) {
-        setWsRootsError(result?.error || 'workspace 목록을 불러오지 못했습니다')
-        return
-      }
-      setWsRootsError(null)
-      setWsRoots(result.roots || [])
-    })()
-    return () => { cancelled = true }
-  }, [settingsOpen, taskTree])
+  /* WORKSPACE REGISTRATION — extracted to useWorkspaceRoots hook */
+  const ws = useWorkspaceRoots({ taskTree, files })
 
   const handleConnectFolder = async () => {
     if (wsBusy) return
@@ -855,7 +821,10 @@ export default function TreePrototype({
         setWsError(result?.error || '프로젝트 연결에 실패했습니다')
         return
       }
-      await files.refresh()
+      const refreshResult = await files.refresh()
+      if (refreshResult && !refreshResult.ok) {
+        setWsError('프로젝트 연결은 완료되었으나 파일 뷰 새로고침에 실패했습니다. 새로고침 버튼을 눌러주세요.')
+      }
       setWsDraft({ rootId: '' })
       setActivePopover(null)
     } catch (exception) {
@@ -865,94 +834,9 @@ export default function TreePrototype({
     }
   }
 
-  const handleAddFolder = async () => {
-    if (wsRootsBusy) return
-    setWsRootsBusy(true)
-    setWsRootsError(null)
-    try {
-      const picked = await taskTree.pickFolder()
-      if (!picked || !picked.ok) {
-        setWsRootsError(picked?.error || '폴더 선택에 실패했습니다')
-        return
-      }
-      if (picked.cancelled) return
-      const result = await taskTree.registerWorkspaceRoot({ devicePath: picked.path })
-      if (!result || !result.ok) {
-        setWsRootsError(result?.error || 'workspace 등록에 실패했습니다')
-        return
-      }
-      await files.refresh()
-      await loadWorkspaceRoots()
-    } catch (exception) {
-      setWsRootsError(String(exception?.message || exception))
-    } finally {
-      setWsRootsBusy(false)
-    }
-  }
-
-  const handleRenameRoot = async (rootId) => {
-    const trimmed = editingName.trim()
-    if (!trimmed) return
-    setWsRootsBusy(true)
-    setWsRootsError(null)
-    try {
-      const result = await taskTree.updateWorkspaceRoot({ rootId, displayName: trimmed })
-      if (!result || !result.ok) {
-        setWsRootsError(result?.error || '이름 변경에 실패했습니다')
-        return
-      }
-      await files.refresh()
-      setEditingRootId(null)
-      setEditingName('')
-      await loadWorkspaceRoots()
-    } catch (exception) {
-      setWsRootsError(String(exception?.message || exception))
-    } finally {
-      setWsRootsBusy(false)
-    }
-  }
-
-  const handleReconnectRoot = async (rootId) => {
-    setWsRootsBusy(true)
-    setWsRootsError(null)
-    try {
-      const picked = await taskTree.pickFolder()
-      if (!picked || !picked.ok) {
-        setWsRootsError(picked?.error || '폴더 선택에 실패했습니다')
-        return
-      }
-      if (picked.cancelled) return
-      const result = await taskTree.updateWorkspaceRoot({ rootId, devicePath: picked.path })
-      if (!result || !result.ok) {
-        setWsRootsError(result?.error || '재연결에 실패했습니다')
-        return
-      }
-      await files.refresh()
-      await loadWorkspaceRoots()
-    } catch (exception) {
-      setWsRootsError(String(exception?.message || exception))
-    } finally {
-      setWsRootsBusy(false)
-    }
-  }
-
-  const handleRemoveRoot = async (rootId) => {
-    setWsRootsBusy(true)
-    setWsRootsError(null)
-    try {
-      const result = await taskTree.removeWorkspaceRoot({ rootId })
-      if (!result || !result.ok) {
-        setWsRootsError(result?.error || '제거에 실패했습니다')
-        return
-      }
-      await files.refresh()
-      await loadWorkspaceRoots()
-    } catch (exception) {
-      setWsRootsError(String(exception?.message || exception))
-    } finally {
-      setWsRootsBusy(false)
-    }
-  }
+  const handleAddFolder = ws.handleAddFolder
+  const handleReconnectRoot = ws.handleReconnectRoot
+  const handleRemoveRoot = ws.handleRemoveRoot
 
   const openLinkPopover = (fileId, fileLabel) => {
     setLinkDraft({
@@ -2083,6 +1967,45 @@ export default function TreePrototype({
             </div>
           )}
 
+          {files.status === 'error' && (
+            <div className="tree-prototype-overview-knowledge">
+              <div className="tree-prototype-knowledge-title">
+                FILES
+              </div>
+              <div className="tree-prototype-add-error" role="alert">
+                파일 뷰 새로고침 실패: {files.error || '알 수 없는 오류'}
+              </div>
+              <button
+                type="button"
+                className="tree-prototype-settings-add"
+                onClick={() => files.refresh()}
+              >
+                <RefreshCw size={11} strokeWidth={1.9} aria-hidden="true" />
+                다시 시도
+              </button>
+            </div>
+          )}
+
+          {files.status === 'ready' &&
+            files.roots.length === 0 && (
+            <div className="tree-prototype-overview-knowledge">
+              <div className="tree-prototype-knowledge-title">
+                FILES
+              </div>
+              <div className="tree-prototype-overview-empty">
+                연결된 폴더가 없습니다.
+              </div>
+              <button
+                type="button"
+                className="tree-prototype-settings-add"
+                onClick={handleAddFolder}
+              >
+                <FolderPlus size={11} strokeWidth={1.9} aria-hidden="true" />
+                Add Folder…
+              </button>
+            </div>
+          )}
+
           {files.status === 'ready' &&
             files.roots.length > 0 && (
             <div className="tree-prototype-overview-knowledge">
@@ -2324,10 +2247,10 @@ export default function TreePrototype({
         <button
           type="button"
           aria-label="Workspace settings"
-          className={settingsOpen ? 'is-active' : ''}
+          className={ws.settingsOpen ? 'is-active' : ''}
           onClick={(event) => {
             event.stopPropagation()
-            setSettingsOpen((prev) => !prev)
+            ws.setSettingsOpen((prev) => !prev)
           }}
         >
           <Settings size={21} aria-hidden="true" />
@@ -3236,13 +3159,13 @@ export default function TreePrototype({
           </motion.div>
         )}
 
-        {settingsOpen && (
+        {ws.settingsOpen && (
           <motion.div
             className="tree-prototype-dialog-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setSettingsOpen(false)}
+            onClick={() => ws.setSettingsOpen(false)}
           >
             <motion.div
               className="tree-prototype-dialog tree-prototype-settings-dialog"
@@ -3255,7 +3178,7 @@ export default function TreePrototype({
                 <div className="tree-prototype-dialog-title">
                   <Settings size={13} strokeWidth={1.9} aria-hidden="true" /> Workspaces
                 </div>
-                <button type="button" onClick={() => setSettingsOpen(false)} aria-label="Close settings">
+                <button type="button" onClick={() => ws.setSettingsOpen(false)} aria-label="Close settings">
                   <X size={14} aria-hidden="true" />
                 </button>
               </div>
@@ -3263,25 +3186,25 @@ export default function TreePrototype({
               <button
                 type="button"
                 className="tree-prototype-settings-add"
-                disabled={wsRootsBusy}
+                disabled={ws.wsRootsBusy}
                 onClick={handleAddFolder}
               >
                 <FolderPlus size={12} strokeWidth={1.9} aria-hidden="true" />
-                {wsRootsBusy ? '처리 중…' : 'Add Folder…'}
+                {ws.wsRootsBusy ? '처리 중…' : 'Add Folder…'}
               </button>
 
-              {wsRootsError && (
+              {ws.wsRootsError && (
                 <div className="tree-prototype-add-error" role="alert">
-                  {wsRootsError}
+                  {ws.wsRootsError}
                 </div>
               )}
 
-              {wsRoots.length === 0 && !wsRootsError && (
+              {ws.wsRoots.length === 0 && !ws.wsRootsError && (
                 <div className="tree-prototype-overview-empty">등록된 Workspace가 없습니다. Add Folder로 추가하세요.</div>
               )}
 
               <div className="tree-prototype-settings-list">
-                {wsRoots.map((root) => (
+                {ws.wsRoots.map((root) => (
                   <div key={root.id} className={['tree-prototype-settings-row', root.available === false ? 'is-unavailable' : ''].filter(Boolean).join(' ')}>
                     <div className="tree-prototype-settings-row-main">
                       <div className="tree-prototype-settings-root-id">
@@ -3289,18 +3212,18 @@ export default function TreePrototype({
                         {root.id}
                         {root.available === false && <span className="tree-prototype-settings-badge">Unavailable on this device</span>}
                       </div>
-                      {editingRootId === root.id ? (
+                      {ws.editingRootId === root.id ? (
                         <div className="tree-prototype-settings-edit">
                           <input
                             type="text"
-                            value={editingName}
-                            onChange={(event) => setEditingName(event.target.value)}
+                            value={ws.editingName}
+                            onChange={(event) => ws.setEditingName(event.target.value)}
                             placeholder="display name"
                             aria-label={`display name for ${root.id}`}
                             autoFocus
                           />
-                          <button type="button" disabled={wsRootsBusy || !editingName.trim()} onClick={() => handleRenameRoot(root.id)}>Save</button>
-                          <button type="button" onClick={() => { setEditingRootId(null); setEditingName('') }}>Cancel</button>
+                          <button type="button" disabled={ws.wsRootsBusy || !ws.editingName.trim()} onClick={() => ws.handleRenameRoot(root.id)}>Save</button>
+                          <button type="button" onClick={() => { ws.setEditingRootId(null); ws.setEditingName('') }}>Cancel</button>
                         </div>
                       ) : (
                         <div className="tree-prototype-settings-display">{root.display_name}</div>
@@ -3310,19 +3233,19 @@ export default function TreePrototype({
                       </div>
                     </div>
                     <div className="tree-prototype-settings-actions">
-                      {editingRootId !== root.id && (
+                      {ws.editingRootId !== root.id && (
                         <button
                           type="button"
-                          disabled={wsRootsBusy}
-                          onClick={() => { setEditingRootId(root.id); setEditingName(root.display_name || '') }}
+                          disabled={ws.wsRootsBusy}
+                          onClick={() => { ws.setEditingRootId(root.id); ws.setEditingName(root.display_name || '') }}
                         >
                           Rename
                         </button>
                       )}
-                      <button type="button" disabled={wsRootsBusy} onClick={() => handleReconnectRoot(root.id)} title="Locate Folder for this root_id">
+                      <button type="button" disabled={ws.wsRootsBusy} onClick={() => handleReconnectRoot(root.id)} title="Locate Folder for this root_id">
                         <RefreshCw size={11} strokeWidth={1.9} aria-hidden="true" /> Locate
                       </button>
-                      <button type="button" className="is-danger" disabled={wsRootsBusy} onClick={() => handleRemoveRoot(root.id)} title="Remove registration (never deletes folder)">
+                      <button type="button" className="is-danger" disabled={ws.wsRootsBusy} onClick={() => handleRemoveRoot(root.id)} title="Remove registration (never deletes folder)">
                         Remove
                       </button>
                     </div>
