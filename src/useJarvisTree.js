@@ -320,6 +320,23 @@ export default function useJarvisTree() {
     return { ok: true, task: response.task }
   }, [fetchSnapshot])
 
+  const editTask = useCallback(async ({ projectId, taskId, title, reason }) => {
+    const api = window.jarvisTree
+    if (!api?.updateTask) {
+      return { ok: false, error: 'jarvisTree.updateTask API 없음 — Electron을 재시작하세요.' }
+    }
+    const p = typeof projectId === 'string' ? projectId.trim() : ''
+    const tid = typeof taskId === 'string' ? taskId.trim() : ''
+    if (!p) return { ok: false, error: 'project_id가 비어 있습니다' }
+    if (!tid) return { ok: false, error: 'task_id가 비어 있습니다' }
+    const response = await api.updateTask(p, tid, undefined, title, reason)
+    if (!response || response.status !== 'ok' || !response.task) {
+      return { ok: false, error: response?.error || 'Task 편집에 실패했습니다' }
+    }
+    await fetchSnapshot()
+    return { ok: true, task: response.task }
+  }, [fetchSnapshot])
+
   const toggleComplete = useCallback(async (nodeId) => {
     const found = findNodeAndPath(root, nodeId)
     if (!found) return { ok: false, error: '노드를 찾을 수 없습니다' }
@@ -610,6 +627,7 @@ export default function useJarvisTree() {
     rootStats: collectStats(root),
     refresh,
     createTask,
+    editTask,
     ...api,
   }
 }

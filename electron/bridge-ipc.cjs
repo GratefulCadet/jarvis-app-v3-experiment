@@ -120,16 +120,19 @@ function registerBridgeIpc({ ipcMain, app }) {
     const projectId = payload?.projectId
     const taskId = payload?.taskId
     const done = payload?.done
+    const title = payload?.title
+    const reason = payload?.reason
     if (typeof projectId !== 'string' || !projectId.trim()) {
       return { type: 'response', status: 'error', error: 'project_id가 비어 있습니다' }
     }
     if (typeof taskId !== 'string' || !taskId.trim()) {
       return { type: 'response', status: 'error', error: 'task_id가 비어 있습니다' }
     }
-    if (typeof done !== 'boolean') {
-      return { type: 'response', status: 'error', error: 'done은 boolean이어야 합니다' }
+    // done toggle or title/reason edit — at least one must be present
+    if (typeof done !== 'boolean' && typeof title !== 'string' && typeof reason !== 'string') {
+      return { type: 'response', status: 'error', error: 'done, title, reason 중 하나 이상 필요합니다' }
     }
-    return manager.updateTask(projectId.trim(), taskId.trim(), done)
+    return manager.updateTask(projectId.trim(), taskId.trim(), done, title, reason)
   })
 
   /*

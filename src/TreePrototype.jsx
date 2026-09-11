@@ -852,6 +852,7 @@ export default function TreePrototype({
   const [toggleError, setToggleError] = useState(null)
 
   const [toggleBusy, setToggleBusy] = useState(false)
+  const [editError, setEditError] = useState(null)
 
   useEffect(() => {
     if (!activePopover) {
@@ -897,11 +898,32 @@ export default function TreePrototype({
     )
   }
 
-  const saveCurrentNode = (
+  const saveCurrentNode = async (
     event,
   ) => {
     event.preventDefault()
 
+    // Canonical Task Edit — persist through TaskStore via bridge
+    if (node.type === 'task' && node.id && node.id.startsWith('t-')) {
+      const projectId = node.parent_id || node.projectId
+      if (projectId) {
+        const result = await taskTree.editTask({
+          projectId,
+          taskId: node.id,
+          title: editDraft.label || undefined,
+          reason: editDraft.description !== undefined ? editDraft.description : undefined,
+        })
+        if (!result?.ok) {
+          setEditError(result?.error || 'Task 편집에 실패했습니다')
+          return
+        }
+        setEditError(null)
+        setActivePopover(null)
+        return
+      }
+    }
+
+    // Non-task nodes remain renderer-local
     taskTree.updateNode(
       node.id,
       editDraft,
@@ -2616,6 +2638,12 @@ export default function TreePrototype({
                 <button type="submit">
                   SAVE
                 </button>
+
+                {editError && (
+                  <div className="tree-prototype-add-error" role="alert">
+                    {editError}
+                  </div>
+                )}
 
                 <button
                   type="button"

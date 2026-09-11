@@ -161,8 +161,12 @@ class BridgeManager {
     return this._call({ type: 'create_task', project_id: projectId, title, reason })
   }
 
-  async updateTask(projectId, taskId, done) {
-    return this._call({ type: 'update_task', project_id: projectId, task_id: taskId, done })
+  async updateTask(projectId, taskId, done, title, reason) {
+    const payload = { type: 'update_task', project_id: projectId, task_id: taskId }
+    if (typeof done === 'boolean') payload.done = done
+    if (typeof title === 'string') payload.title = title
+    if (typeof reason === 'string') payload.reason = reason
+    return this._call(payload)
   }
 
   async discoverProjects() {
