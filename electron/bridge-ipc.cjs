@@ -23,6 +23,23 @@ function resolveHarnessHome() {
   return path.join(os.homedir(), 'Desktop', 'FB_Soap_LocalLLM')
 }
 
+function _err(msg) {
+  return { type: 'response', status: 'error', error: msg }
+}
+
+function _str(val) {
+  return typeof val === 'string' ? val.trim() : undefined
+}
+
+/** Apply multiple {key, alias} lookups from payload, return first non-empty trimmed string. */
+function _field(payload, ...keys) {
+  for (const k of keys) {
+    const v = payload?.[k]
+    if (typeof v === 'string' && v.trim()) return v.trim()
+  }
+  return undefined
+}
+
 function registerBridgeIpc({ ipcMain, app }) {
   const harnessHome = resolveHarnessHome()
   const manager = new BridgeManager({
@@ -185,31 +202,23 @@ function registerBridgeIpc({ ipcMain, app }) {
   })
 
   ipcMain.handle('jarvis:set-project-workspace', async (_event, payload) => {
-    const projectId = payload?.projectId
-    const rootId = payload?.rootId
-    if (typeof projectId !== 'string' || !projectId.trim()) {
-      return { type: 'response', status: 'error', error: 'project_id가 비어 있습니다' }
-    }
-    if (typeof rootId !== 'string' || !rootId.trim()) {
-      return { type: 'response', status: 'error', error: 'root_id(논리 root identity)가 비어 있습니다' }
-    }
-    return manager.setProjectWorkspace(projectId.trim(), rootId.trim())
+    const projectId = _field(payload, 'projectId', 'project_id')
+    const rootId = _field(payload, 'rootId', 'root_id')
+    if (!projectId) return _err('project_id가 비어 있습니다')
+    if (!rootId) return _err('root_id(논리 root identity)가 비어 있습니다')
+    return manager.setProjectWorkspace(projectId, rootId)
   })
 
   ipcMain.handle('jarvis:get-project-workspace', async (_event, payload) => {
-    const projectId = payload?.projectId
-    if (typeof projectId !== 'string' || !projectId.trim()) {
-      return { type: 'response', status: 'error', error: 'project_id가 비어 있습니다' }
-    }
-    return manager.getProjectWorkspace(projectId.trim())
+    const projectId = _field(payload, 'projectId', 'project_id')
+    if (!projectId) return _err('project_id가 비어 있습니다')
+    return manager.getProjectWorkspace(projectId)
   })
 
   ipcMain.handle('jarvis:clear-project-workspace', async (_event, payload) => {
-    const projectId = payload?.projectId
-    if (typeof projectId !== 'string' || !projectId.trim()) {
-      return { type: 'response', status: 'error', error: 'project_id가 비어 있습니다' }
-    }
-    return manager.clearProjectWorkspace(projectId.trim())
+    const projectId = _field(payload, 'projectId', 'project_id')
+    if (!projectId) return _err('project_id가 비어 있습니다')
+    return manager.clearProjectWorkspace(projectId)
   })
 
   // WORKSPACE REGISTRATION + FOLDER PICKER V1 — main holds dialog, renderer sends intent only
@@ -218,49 +227,33 @@ function registerBridgeIpc({ ipcMain, app }) {
   })
 
   ipcMain.handle('jarvis:register-workspace-root', async (_event, payload) => {
-    const devicePath = payload?.devicePath || payload?.device_path || payload?.path
-    const displayName = payload?.displayName || payload?.display_name
-    if (typeof devicePath !== 'string' || !devicePath.trim()) {
-      return { type: 'response', status: 'error', error: 'device_path(폴더 경로)가 필요합니다' }
-    }
-    return manager.registerWorkspaceRoot(devicePath.trim(), typeof displayName === 'string' ? displayName.trim() || undefined : undefined)
+    const devicePath = _field(payload, 'devicePath', 'device_path', 'path')
+    if (!devicePath) return _err('device_path(폴더 경로)가 필요합니다')
+    const displayName = _str(payload?.displayName || payload?.display_name)
+    return manager.registerWorkspaceRoot(devicePath, displayName)
   })
 
   ipcMain.handle('jarvis:update-workspace-root', async (_event, payload) => {
-    const rootId = payload?.rootId || payload?.root_id || payload?.id
-    if (typeof rootId !== 'string' || !rootId.trim()) {
-      return { type: 'response', status: 'error', error: 'root_id가 필요합니다' }
-    }
-    return manager.updateWorkspaceRoot(
-      rootId.trim(),
-      typeof payload?.displayName === 'string' ? payload.displayName : payload?.display_name,
-      typeof payload?.devicePath === 'string' ? payload.devicePath : payload?.device_path || payload?.path,
-    )
+    const rootId = _field(payload, 'rootId', 'root_id', 'id')
+    if (!rootId) return _err('root_id가 필요합니다')
+    const displayName = _str(payload?.displayName || payload?.display_name)
+    const devicePath = _str(payload?.devicePath || payload?.device_path || payload?.path)
+    return manager.updateWorkspaceRoot(rootId, displayName, devicePath)
   })
 
   ipcMain.handle('jarvis:remove-workspace-root', async (_event, payload) => {
-    const rootId = payload?.rootId || payload?.root_id || payload?.id
-    if (typeof rootId !== 'string' || !rootId.trim()) {
-      return { type: 'response', status: 'error', error: 'root_id가 필요합니다' }
-    }
-    return manager.removeWorkspaceRoot(rootId.trim())
+    const rootId = _field(payload, 'rootId', 'root_id', 'id')
+    if (!rootId) return _err('root_id가 필요합니다')
+    return manager.removeWorkspaceRoot(rootId)
   })
 
   ipcMain.handle('jarvis:connect-project-workspace', async (_event, payload) => {
-    const projectId = payload?.projectId || payload?.project_id
-    const devicePath = payload?.devicePath || payload?.device_path || payload?.path || payload?.folder
-    if (typeof projectId !== 'string' || !projectId.trim()) {
-      return { type: 'response', status: 'error', error: 'project_id가 필요합니다' }
-    }
-    if (typeof devicePath !== 'string' || !devicePath.trim()) {
-      return { type: 'response', status: 'error', error: 'device_path가 필요합니다' }
-    }
-    const displayName = payload?.displayName || payload?.display_name
-    return manager.connectProjectWorkspace(
-      projectId.trim(),
-      devicePath.trim(),
-      typeof displayName === 'string' ? displayName.trim() || undefined : undefined,
-    )
+    const projectId = _field(payload, 'projectId', 'project_id')
+    const devicePath = _field(payload, 'devicePath', 'device_path', 'path', 'folder')
+    if (!projectId) return _err('project_id가 필요합니다')
+    if (!devicePath) return _err('device_path가 필요합니다')
+    const displayName = _str(payload?.displayName || payload?.display_name)
+    return manager.connectProjectWorkspace(projectId, devicePath, displayName)
   })
 
   // OS folder picker — MAIN only (xi-api-key pattern: never expose fs to renderer)

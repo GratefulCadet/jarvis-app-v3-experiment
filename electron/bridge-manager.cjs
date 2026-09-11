@@ -120,299 +120,109 @@ class BridgeManager {
     this.pending.clear()
   }
 
-  /* ---- 공개 API (모든 실패는 {status:'error', error}로 정규화) ---- */
+  /* ---- 내부 유틸 ---- */
 
-  async chat(text, projectId) {
+  /** _send + try/catch — 모든 실패를 {status:'error', error}로 정규화. */
+  async _call(msg) {
     try {
-      return await this._send({
-        type: 'chat',
-        text,
-        project_id: projectId,
-      })
+      return await this._send(msg)
     } catch (err) {
       return { type: 'response', status: 'error', error: err.message }
     }
+  }
+
+  /* ---- 공개 API ---- */
+
+  async chat(text, projectId) {
+    return this._call({ type: 'chat', text, project_id: projectId })
   }
 
   async confirm(toolCall) {
-    try {
-      return await this._send({
-        type: 'confirm',
-        tool_call: toolCall,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'confirm', tool_call: toolCall })
   }
 
   async reject(toolCall) {
-    try {
-      return await this._send({
-        type: 'reject',
-        tool_call: toolCall,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'reject', tool_call: toolCall })
   }
 
   async ping() {
-    try {
-      return await this._send({ type: 'ping' })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'ping' })
   }
 
-  /*
-    read-only — 실제 JARVIS memory(projects.md + tasks.md) 기반 구조화 트리.
-    모델 호출 없이 Harness가 단일 원천에서 스냅샷을 만든다.
-  */
   async treeSnapshot() {
-    try {
-      return await this._send({ type: 'tree_snapshot' })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'tree_snapshot' })
   }
 
-  /*
-    read-only — Knowledge Markdown pages의 재귀 트리. PageStore가 단일 원천
-    (<memory_dir>/pages)에서 스냅샷을 만든다. 모델 호출 없음.
-  */
   async pagesSnapshot() {
-    try {
-      return await this._send({ type: 'pages_snapshot' })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'pages_snapshot' })
   }
 
-  /*
-    deterministic canonical write — SYSTEM MAP Add Task.
-    Direct user action (Tree UI) → TaskStore via harness_bridge create_task.
-    No LLM, no Permission Gate round-trip — TaskStore is the single writer.
-  */
   async createTask(projectId, title, reason) {
-    try {
-      return await this._send({
-        type: 'create_task',
-        project_id: projectId,
-        title,
-        reason,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'create_task', project_id: projectId, title, reason })
   }
 
-  /*
-    deterministic canonical write — SYSTEM MAP Complete/Reopen.
-    Direct user action → TaskStore.set_done via harness_bridge update_task.
-    No LLM, no Permission Gate — TaskStore is the single writer.
-  */
   async updateTask(projectId, taskId, done) {
-    try {
-      return await this._send({
-        type: 'update_task',
-        project_id: projectId,
-        task_id: taskId,
-        done,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'update_task', project_id: projectId, task_id: taskId, done })
   }
 
-  /*
-    read-only — Context Discovery: 전체 프로젝트 나열 (id·제목·task 수).
-    모델 호출 없음. Discovery adapter가 canonical 원천만 읽는다.
-  */
   async discoverProjects() {
-    try {
-      return await this._send({ type: 'discover_projects' })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'discover_projects' })
   }
 
-  /*
-    read-only — Context Discovery: Project/Task/Page/File 통합 검색.
-    모델 호출 없음. 각 결과는 자기 도메인의 canonical identity를 유지한다.
-  */
   async searchContext(query, limit) {
-    try {
-      return await this._send({
-        type: 'search_context',
-        query,
-        limit,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'search_context', query, limit })
   }
 
-  /*
-    read-only — 승인된 파일 루트의 경계 있는 트리 (SYSTEM MAP FILES).
-    모델 호출 없음. 루트가 없어도 status:ok + roots:[] (renderer가 상태 표시).
-  */
   async filesSnapshot(root, relativePath, depth) {
-    try {
-      return await this._send({
-        type: 'files_snapshot',
-        root,
-        path: relativePath,
-        depth,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'files_snapshot', root, path: relativePath, depth })
   }
 
-  /*
-    deterministic canonical write — SYSTEM MAP Link to Project (RESOURCE LINK V1).
-    Direct user action → ProjectResources via harness_bridge link_project_file.
-    No LLM, no Permission Gate — ProjectResources is the single writer.
-    file_id는 FileRef identity(f-*)만 받는다 — 경로는 하드 거부.
-  */
   async linkProjectFile(projectId, fileId, relation) {
-    try {
-      return await this._send({
-        type: 'link_project_file',
-        project_id: projectId,
-        file_id: fileId,
-        relation,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'link_project_file', project_id: projectId, file_id: fileId, relation })
   }
 
-  /*
-    read-only — Project Resources (semantic projection).
-    locator는 읽을 때 FileRef에서 resolve — rename/move가 링크 재작성 없이 반영된다.
-  */
   async listProjectResources(projectId) {
-    try {
-      return await this._send({
-        type: 'list_project_resources',
-        project_id: projectId,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'list_project_resources', project_id: projectId })
   }
 
-  /*
-    deterministic metadata cleanup — unlink. JARVIS 메타데이터만 제거;
-    사용자 파일은 절대 건드리지 않는다.
-  */
   async unlinkProjectFile(linkId) {
-    try {
-      return await this._send({
-        type: 'unlink_project_file',
-        link_id: linkId,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'unlink_project_file', link_id: linkId })
   }
 
-  /*
-    PROJECT PRIMARY WORKSPACE V1 — Project → 논리 WorkspaceRoot 관계.
-    setProjectWorkspace: explicit user action → deterministic canonical write.
-    root_id는 논리 identity만 — 절대 경로는 bridge가 하드 거부한다(§7).
-  */
+  /* PROJECT PRIMARY WORKSPACE V1 — Project → 논리 WorkspaceRoot 관계 */
+
   async setProjectWorkspace(projectId, rootId) {
-    try {
-      return await this._send({
-        type: 'set_project_workspace',
-        project_id: projectId,
-        root_id: rootId,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'set_project_workspace', project_id: projectId, root_id: rootId })
   }
 
   async getProjectWorkspace(projectId) {
-    try {
-      return await this._send({
-        type: 'get_project_workspace',
-        project_id: projectId,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'get_project_workspace', project_id: projectId })
   }
 
   async clearProjectWorkspace(projectId) {
-    try {
-      return await this._send({
-        type: 'clear_project_workspace',
-        project_id: projectId,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'clear_project_workspace', project_id: projectId })
   }
 
-  /*
-    WORKSPACE REGISTRATION + FOLDER PICKER V1 — persistent WorkspaceRoot registry.
-    All file access remains READ-only; registration only stores metadata.
-  */
+  /* WORKSPACE REGISTRATION + FOLDER PICKER V1 */
+
   async listWorkspaceRoots() {
-    try {
-      return await this._send({ type: 'list_workspace_roots' })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'list_workspace_roots' })
   }
 
   async registerWorkspaceRoot(devicePath, displayName) {
-    try {
-      return await this._send({
-        type: 'register_workspace_root',
-        device_path: devicePath,
-        display_name: displayName,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'register_workspace_root', device_path: devicePath, display_name: displayName })
   }
 
   async updateWorkspaceRoot(rootId, displayName, devicePath) {
-    try {
-      return await this._send({
-        type: 'update_workspace_root',
-        root_id: rootId,
-        display_name: displayName,
-        device_path: devicePath,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'update_workspace_root', root_id: rootId, display_name: displayName, device_path: devicePath })
   }
 
   async removeWorkspaceRoot(rootId) {
-    try {
-      return await this._send({ type: 'remove_workspace_root', root_id: rootId })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'remove_workspace_root', root_id: rootId })
   }
 
   async connectProjectWorkspace(projectId, devicePath, displayName) {
-    try {
-      return await this._send({
-        type: 'connect_project_workspace',
-        project_id: projectId,
-        device_path: devicePath,
-        display_name: displayName,
-      })
-    } catch (err) {
-      return { type: 'response', status: 'error', error: err.message }
-    }
+    return this._call({ type: 'connect_project_workspace', project_id: projectId, device_path: devicePath, display_name: displayName })
   }
 
   async shutdown() {
