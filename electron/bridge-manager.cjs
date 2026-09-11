@@ -357,6 +357,64 @@ class BridgeManager {
     }
   }
 
+  /*
+    WORKSPACE REGISTRATION + FOLDER PICKER V1 — persistent WorkspaceRoot registry.
+    All file access remains READ-only; registration only stores metadata.
+  */
+  async listWorkspaceRoots() {
+    try {
+      return await this._send({ type: 'list_workspace_roots' })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
+  async registerWorkspaceRoot(devicePath, displayName) {
+    try {
+      return await this._send({
+        type: 'register_workspace_root',
+        device_path: devicePath,
+        display_name: displayName,
+      })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
+  async updateWorkspaceRoot(rootId, displayName, devicePath) {
+    try {
+      return await this._send({
+        type: 'update_workspace_root',
+        root_id: rootId,
+        display_name: displayName,
+        device_path: devicePath,
+      })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
+  async removeWorkspaceRoot(rootId) {
+    try {
+      return await this._send({ type: 'remove_workspace_root', root_id: rootId })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
+  async connectProjectWorkspace(projectId, devicePath, displayName) {
+    try {
+      return await this._send({
+        type: 'connect_project_workspace',
+        project_id: projectId,
+        device_path: devicePath,
+        display_name: displayName,
+      })
+    } catch (err) {
+      return { type: 'response', status: 'error', error: err.message }
+    }
+  }
+
   async shutdown() {
     if (!this.isRunning) return { status: 'ok' }
     try {

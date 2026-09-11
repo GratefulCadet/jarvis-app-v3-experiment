@@ -212,6 +212,71 @@ function registerBridgeIpc({ ipcMain, app }) {
     return manager.clearProjectWorkspace(projectId.trim())
   })
 
+  // WORKSPACE REGISTRATION + FOLDER PICKER V1 — main holds dialog, renderer sends intent only
+  ipcMain.handle('jarvis:list-workspace-roots', async () => {
+    return manager.listWorkspaceRoots()
+  })
+
+  ipcMain.handle('jarvis:register-workspace-root', async (_event, payload) => {
+    const devicePath = payload?.devicePath || payload?.device_path || payload?.path
+    const displayName = payload?.displayName || payload?.display_name
+    if (typeof devicePath !== 'string' || !devicePath.trim()) {
+      return { type: 'response', status: 'error', error: 'device_path(폴더 경로)가 필요합니다' }
+    }
+    return manager.registerWorkspaceRoot(devicePath.trim(), typeof displayName === 'string' ? displayName.trim() || undefined : undefined)
+  })
+
+  ipcMain.handle('jarvis:update-workspace-root', async (_event, payload) => {
+    const rootId = payload?.rootId || payload?.root_id || payload?.id
+    if (typeof rootId !== 'string' || !rootId.trim()) {
+      return { type: 'response', status: 'error', error: 'root_id가 필요합니다' }
+    }
+    return manager.updateWorkspaceRoot(
+      rootId.trim(),
+      typeof payload?.displayName === 'string' ? payload.displayName : payload?.display_name,
+      typeof payload?.devicePath === 'string' ? payload.devicePath : payload?.device_path || payload?.path,
+    )
+  })
+
+  ipcMain.handle('jarvis:remove-workspace-root', async (_event, payload) => {
+    const rootId = payload?.rootId || payload?.root_id || payload?.id
+    if (typeof rootId !== 'string' || !rootId.trim()) {
+      return { type: 'response', status: 'error', error: 'root_id가 필요합니다' }
+    }
+    return manager.removeWorkspaceRoot(rootId.trim())
+  })
+
+  ipcMain.handle('jarvis:connect-project-workspace', async (_event, payload) => {
+    const projectId = payload?.projectId || payload?.project_id
+    const devicePath = payload?.devicePath || payload?.device_path || payload?.path || payload?.folder
+    if (typeof projectId !== 'string' || !projectId.trim()) {
+      return { type: 'response', status: 'error', error: 'project_id가 필요합니다' }
+    }
+    if (typeof devicePath !== 'string' || !devicePath.trim()) {
+      return { type: 'response', status: 'error', error: 'device_path가 필요합니다' }
+    }
+    const displayName = payload?.displayName || payload?.display_name
+    return manager.connectProjectWorkspace(
+      projectId.trim(),
+      devicePath.trim(),
+      typeof displayName === 'string' ? displayName.trim() || undefined : undefined,
+    )
+  })
+
+  // OS folder picker — MAIN only (xi-api-key pattern: never expose fs to renderer)
+  const { dialog } = require('electron')
+  ipcMain.handle('jarvis:pick-folder', async (event) => {
+    const win = require('electron').BrowserWindow.fromWebContents(event.sender)
+    const result = await dialog.showOpenDialog(win || undefined, {
+      properties: ['openDirectory'],
+      title: 'Connect Workspace — 폴더 선택',
+    })
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return { status: 'cancelled' }
+    }
+    return { status: 'ok', path: result.filePaths[0] }
+  })
+
   app.on('will-quit', () => {
     manager.stop()
   })

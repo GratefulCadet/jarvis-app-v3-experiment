@@ -413,6 +413,101 @@ export default function useJarvisTree() {
         return { ok: true, removed: response.removed }
       },
 
+      /* WORKSPACE REGISTRATION V1 — persistent WorkspaceRoot registry + picker.
+         Renderer sends intent only; MAIN does dialog + Harness write. */
+      async listWorkspaceRoots() {
+        const api = window.jarvisDiscovery
+        if (!api?.listWorkspaceRoots) {
+          return { ok: false, error: 'jarvisDiscovery.listWorkspaceRoots API 없음 — 재시작하세요.' }
+        }
+        const response = await api.listWorkspaceRoots()
+        if (!response || response.status !== 'ok') {
+          return { ok: false, error: response?.error || 'workspace 목록을 불러오지 못했습니다' }
+        }
+        return { ok: true, roots: response.roots || [] }
+      },
+
+      async registerWorkspaceRoot({ devicePath, displayName }) {
+        const api = window.jarvisDiscovery
+        if (!api?.registerWorkspaceRoot) {
+          return { ok: false, error: 'jarvisDiscovery.registerWorkspaceRoot API 없음' }
+        }
+        const p = typeof devicePath === 'string' ? devicePath.trim() : ''
+        if (!p) return { ok: false, error: 'devicePath가 비어 있습니다' }
+        const response = await api.registerWorkspaceRoot(p, typeof displayName === 'string' ? displayName.trim() || undefined : undefined)
+        if (!response || response.status !== 'ok') {
+          return { ok: false, error: response?.error || 'workspace 등록에 실패했습니다' }
+        }
+        await fetchSnapshot()
+        return { ok: true, created: response.created, root: response.root }
+      },
+
+      async updateWorkspaceRoot({ rootId, displayName, devicePath }) {
+        const api = window.jarvisDiscovery
+        if (!api?.updateWorkspaceRoot) {
+          return { ok: false, error: 'jarvisDiscovery.updateWorkspaceRoot API 없음' }
+        }
+        const r = typeof rootId === 'string' ? rootId.trim() : ''
+        if (!r) return { ok: false, error: 'root_id가 비어 있습니다' }
+        const response = await api.updateWorkspaceRoot(
+          r,
+          typeof displayName === 'string' ? displayName : undefined,
+          typeof devicePath === 'string' ? devicePath : undefined,
+        )
+        if (!response || response.status !== 'ok') {
+          return { ok: false, error: response?.error || 'workspace 수정에 실패했습니다' }
+        }
+        await fetchSnapshot()
+        return { ok: true, root: response.root, updated: response.updated }
+      },
+
+      async removeWorkspaceRoot({ rootId }) {
+        const api = window.jarvisDiscovery
+        if (!api?.removeWorkspaceRoot) {
+          return { ok: false, error: 'jarvisDiscovery.removeWorkspaceRoot API 없음' }
+        }
+        const r = typeof rootId === 'string' ? rootId.trim() : ''
+        if (!r) return { ok: false, error: 'root_id가 비어 있습니다' }
+        const response = await api.removeWorkspaceRoot(r)
+        if (!response || response.status !== 'ok') {
+          return { ok: false, error: response?.error || 'workspace 제거에 실패했습니다' }
+        }
+        await fetchSnapshot()
+        return { ok: true, root: response.root }
+      },
+
+      async connectProjectWorkspace({ projectId, devicePath, displayName }) {
+        const api = window.jarvisDiscovery
+        if (!api?.connectProjectWorkspace) {
+          return { ok: false, error: 'jarvisDiscovery.connectProjectWorkspace API 없음' }
+        }
+        const p = typeof projectId === 'string' ? projectId.trim() : ''
+        const d = typeof devicePath === 'string' ? devicePath.trim() : ''
+        if (!p) return { ok: false, error: 'project_id가 비어 있습니다' }
+        if (!d) return { ok: false, error: 'devicePath가 비어 있습니다' }
+        const response = await api.connectProjectWorkspace(p, d, typeof displayName === 'string' ? displayName.trim() || undefined : undefined)
+        if (!response || response.status !== 'ok') {
+          return { ok: false, error: response?.error || '프로젝트 연결에 실패했습니다' }
+        }
+        await fetchSnapshot()
+        return { ok: true, root: response.root, workspace: response.workspace }
+      },
+
+      async pickFolder() {
+        const api = window.jarvisDiscovery
+        if (!api?.pickFolder) {
+          return { ok: false, error: 'jarvisDiscovery.pickFolder API 없음' }
+        }
+        const response = await api.pickFolder()
+        // bridge returns {status:'cancelled'} | {status:'ok', path}
+        if (!response) return { ok: false, error: 'picker 응답 없음' }
+        if (response.status === 'cancelled') return { ok: true, cancelled: true }
+        if (response.status === 'ok' && response.path) return { ok: true, path: response.path }
+        // fallback for error shape {status:'error', error}
+        if (response.status === 'error') return { ok: false, error: response.error }
+        return { ok: false, error: '알 수 없는 picker 응답' }
+      },
+
       // Renderer-local generic add (non-task types — Edit/Delete와 함께 후속 마일스톤에서 제거 예정)
       // Task 타입의 Add는 canonical createTask를 사용해야 한다 — TreePrototype에서 분기한다.
       addChild(parentId, payload) {

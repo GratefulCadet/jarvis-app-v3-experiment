@@ -183,6 +183,45 @@ contextBridge.exposeInMainWorld(
         projectId,
       })
     },
+
+    /* WORKSPACE REGISTRATION + FOLDER PICKER V1 — persistent WorkspaceRoot registry.
+       Renderer sends intent only; MAIN does dialog + Harness write (security narrow). */
+    listWorkspaceRoots: () => {
+      return ipcRenderer.invoke('jarvis:list-workspace-roots')
+    },
+
+    registerWorkspaceRoot: (devicePath, displayName) => {
+      return ipcRenderer.invoke('jarvis:register-workspace-root', {
+        devicePath,
+        displayName,
+      })
+    },
+
+    updateWorkspaceRoot: (rootId, displayName, devicePath) => {
+      return ipcRenderer.invoke('jarvis:update-workspace-root', {
+        rootId,
+        displayName,
+        devicePath,
+      })
+    },
+
+    removeWorkspaceRoot: (rootId) => {
+      return ipcRenderer.invoke('jarvis:remove-workspace-root', {
+        rootId,
+      })
+    },
+
+    connectProjectWorkspace: (projectId, devicePath, displayName) => {
+      return ipcRenderer.invoke('jarvis:connect-project-workspace', {
+        projectId,
+        devicePath,
+        displayName,
+      })
+    },
+
+    pickFolder: () => {
+      return ipcRenderer.invoke('jarvis:pick-folder')
+    },
   },
 )
 
