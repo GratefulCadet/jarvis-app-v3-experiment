@@ -854,6 +854,9 @@ export default function TreePrototype({
   const [toggleBusy, setToggleBusy] = useState(false)
   const [editError, setEditError] = useState(null)
 
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
+
   useEffect(() => {
     if (!activePopover) {
       return undefined
@@ -1122,11 +1125,34 @@ export default function TreePrototype({
     }
   }
 
-  const deleteCurrentNode = () => {
-    const nextNodeId =
-      taskTree.deleteNode(
-        node.id,
-      )
+  const deleteCurrentNode = async () => {
+    // Canonical Task Delete — destructive write through TaskStore via bridge.
+    // No renderer-local removal before canonical success (fabrication 금지).
+    if (node.type === 'task' && node.id && node.id.startsWith('t-')) {
+      if (deleteBusy) return
+      setDeleteBusy(true)
+      setDeleteError(null)
+      try {
+        const result = await taskTree.deleteTask({ taskId: node.id })
+        if (!result?.ok) {
+          setDeleteError(result?.error || 'Task 삭제에 실패했습니다')
+          return
+        }
+        setDialog(null)
+        // PART G — deleted task가 현재 선택이었으면 parent Project로 이동
+        goToNode(result.parentId || taskTree.root.id)
+      } catch (exception) {
+        setDeleteError(String(exception?.message || exception))
+      } finally {
+        setDeleteBusy(false)
+      }
+      return
+    }
+
+    // Non-task nodes remain renderer-local
+    const nextNodeId = taskTree.deleteNode(
+      node.id,
+    )
 
     goToNode(nextNodeId)
     setDialog(null)
@@ -3089,6 +3115,12 @@ export default function TreePrototype({
                 {node.label} and its child paths will be removed.
               </p>
 
+              {deleteError && (
+                <div className="tree-prototype-add-error" role="alert">
+                  {deleteError}
+                </div>
+              )}
+
               <div className="tree-prototype-dialog-actions">
                 <button
                   type="button"
@@ -3105,8 +3137,11 @@ export default function TreePrototype({
                   onClick={
                     deleteCurrentNode
                   }
+                  disabled={
+                    deleteBusy
+                  }
                 >
-                  DELETE
+                  {deleteBusy ? '처리 중…' : 'DELETE'}
                 </button>
               </div>
             </motion.div>

@@ -99,6 +99,13 @@ contextBridge.exposeInMainWorld(
         reason,
       })
     },
+
+    deleteTask: (projectId, taskId) => {
+      return ipcRenderer.invoke('jarvis:delete-task', {
+        projectId,
+        taskId,
+      })
+    },
   },
 )
 

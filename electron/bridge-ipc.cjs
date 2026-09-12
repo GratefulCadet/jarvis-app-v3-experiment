@@ -135,6 +135,18 @@ function registerBridgeIpc({ ipcMain, app }) {
     return manager.updateTask(projectId.trim(), taskId.trim(), done, title, reason)
   })
 
+  ipcMain.handle('jarvis:delete-task', async (_event, payload) => {
+    const projectId = payload?.projectId
+    const taskId = payload?.taskId
+    if (typeof projectId !== 'string' || !projectId.trim()) {
+      return { type: 'response', status: 'error', error: 'project_id가 비어 있습니다' }
+    }
+    if (typeof taskId !== 'string' || !taskId.trim()) {
+      return { type: 'response', status: 'error', error: 'task_id가 비어 있습니다' }
+    }
+    return manager.deleteTask(projectId.trim(), taskId.trim())
+  })
+
   /*
     Context Discovery + FILES (read-only) — renderer는 discovery 결과만 본다.
     파일시스템 접근은 Harness FileStore 경계(승인 루트·민감 차단) 뒤에 있다.

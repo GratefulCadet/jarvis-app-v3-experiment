@@ -337,6 +337,31 @@ export default function useJarvisTree() {
     return { ok: true, task: response.task }
   }, [fetchSnapshot])
 
+  // Canonical Task Delete — destructive, dedicated bridge message (not update_task).
+  // Resolves owning project from the tree path (task nodes carry no projectId).
+  const deleteTask = useCallback(async ({ taskId }) => {
+    const api = window.jarvisTree
+    if (!api?.deleteTask) {
+      return { ok: false, error: 'jarvisTree.deleteTask API 없음 — Electron을 재시작하세요.' }
+    }
+    const found = findNodeAndPath(root, taskId)
+    if (!found) return { ok: false, error: '노드를 찾을 수 없습니다' }
+    const { node, path } = found
+    if (node.type !== 'task') return { ok: false, error: 'task 노드가 아닙니다' }
+    let projectId = null
+    for (let i = path.length - 1; i >= 0; i -= 1) {
+      if (path[i].type === 'project') { projectId = path[i].id; break }
+    }
+    if (!projectId) return { ok: false, error: '프로젝트를 찾을 수 없습니다' }
+    const response = await api.deleteTask(projectId, node.id)
+    if (!response || response.status !== 'ok' || !response.task) {
+      return { ok: false, error: response?.error || 'Task 삭제에 실패했습니다' }
+    }
+    // 성공 — canonical state에서 fresh snapshot으로 UI 갱신 (수동 패치 금지)
+    await fetchSnapshot()
+    return { ok: true, task: response.task, parentId: projectId }
+  }, [root, fetchSnapshot])
+
   const toggleComplete = useCallback(async (nodeId) => {
     const found = findNodeAndPath(root, nodeId)
     if (!found) return { ok: false, error: '노드를 찾을 수 없습니다' }
@@ -615,9 +640,10 @@ export default function useJarvisTree() {
 
       createTask,
       setTaskDone,
+      deleteTask,
       refresh,
     }),
-    [root, createTask, setTaskDone, refresh, toggleComplete, fetchSnapshot],
+    [root, createTask, setTaskDone, deleteTask, refresh, toggleComplete, fetchSnapshot],
   )
 
   return {
@@ -628,6 +654,7 @@ export default function useJarvisTree() {
     refresh,
     createTask,
     editTask,
+    deleteTask,
     ...api,
   }
 }
