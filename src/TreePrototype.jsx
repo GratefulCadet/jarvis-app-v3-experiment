@@ -782,13 +782,18 @@ export default function TreePrototype({
   const [linkDraft, setLinkDraft] = useState({
     fileId: null,
     fileLabel: '',
+    targetType: 'project',
     projectId: '',
+    taskId: '',
     relation: 'reference',
   })
 
   const [linkError, setLinkError] = useState(null)
 
   const [linkBusy, setLinkBusy] = useState(false)
+
+  const [unlinkBusy, setUnlinkBusy] = useState(false)
+  const [unlinkError, setUnlinkError] = useState(null)
 
   /* PROJECT PRIMARY WORKSPACE V1 — Project → 논리 WorkspaceRoot 관계. */
   const [wsDraft, setWsDraft] = useState({ rootId: '' })
@@ -842,7 +847,9 @@ export default function TreePrototype({
     setLinkDraft({
       fileId,
       fileLabel: fileLabel || '',
+      targetType: 'project',
       projectId: '',
+      taskId: '',
       relation: 'reference',
     })
     setLinkError(null)
@@ -1019,21 +1026,35 @@ export default function TreePrototype({
   /* RESOURCE LINK V1 — files 뷰 파일 행의 명시적 Link to Project.
      fileId는 stable FileRef identity(f-*)만 — identity 없는 entry(미등록
      스캔)는 링크 버튼 자체가 없다(bridge도 경로를 거부한다). */
+  const unlinkCurrentTaskResource = async (linkId) => {
+    if (unlinkBusy || !linkId) return
+    setUnlinkBusy(true)
+    setUnlinkError(null)
+    try {
+      const result = await taskTree.unlinkTaskFile({ linkId })
+      if (!result?.ok) {
+        setUnlinkError(result?.error || 'Task 리소스 연결 해제에 실패했습니다')
+        return
+      }
+    } catch (exception) {
+      setUnlinkError(String(exception?.message || exception))
+    } finally {
+      setUnlinkBusy(false)
+    }
+  }
   const linkCurrentFile = async (event) => {
     event.preventDefault()
-
-    if (linkBusy) return
 
     if (!linkDraft.fileId) {
       setLinkError('stable FileRef identity가 없어 링크할 수 없습니다.')
       return
     }
 
-    const projectId = typeof linkDraft.projectId === 'string'
-      ? linkDraft.projectId.trim()
-      : ''
-    if (!projectId) {
-      setLinkError('프로젝트를 선택하세요.')
+    const targetId = linkDraft.targetType === 'task'
+      ? (typeof linkDraft.taskId === 'string' ? linkDraft.taskId.trim() : '')
+      : (typeof linkDraft.projectId === 'string' ? linkDraft.projectId.trim() : '')
+    if (!targetId) {
+      setLinkError(linkDraft.targetType === 'task' ? 'Task를 선택하세요.' : '프로젝트를 선택하세요.')
       return
     }
 
@@ -1041,18 +1062,31 @@ export default function TreePrototype({
     setLinkError(null)
 
     try {
-      const result = await taskTree.linkProjectFile({
-        projectId,
-        fileId: linkDraft.fileId,
-        relation: linkDraft.relation,
-      })
+      const result = linkDraft.targetType === 'task'
+        ? await taskTree.linkTaskFile({
+          taskId: targetId,
+          fileId: linkDraft.fileId,
+          relation: linkDraft.relation,
+        })
+        : await taskTree.linkProjectFile({
+          projectId: targetId,
+          fileId: linkDraft.fileId,
+          relation: linkDraft.relation,
+        })
 
       if (!result || !result.ok) {
         setLinkError(result?.error || '링크 생성에 실패했습니다')
         return
       }
 
-      setLinkDraft({ projectId: '', relation: 'reference' })
+      setLinkDraft({
+        fileId: null,
+        fileLabel: '',
+        targetType: 'project',
+        projectId: '',
+        taskId: '',
+        relation: 'reference',
+      })
       setActivePopover(null)
     } catch (exception) {
       setLinkError(String(exception?.message || exception))
@@ -1960,7 +1994,30 @@ export default function TreePrototype({
             onToggleExpanded={
               toggleExpanded
             }
+            renderRowAction={(rowNode) =>
+              rowNode.type === 'task_resource' ? (
+                <button
+                  type="button"
+                  className="tree-prototype-map-row-action"
+                  aria-label={`Unlink ${rowNode.label}`}
+                  title="Unlink resource"
+                  disabled={unlinkBusy}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void unlinkCurrentTaskResource(rowNode.linkId)
+                  }}
+                >
+                  <X size={11} strokeWidth={2} aria-hidden="true" />
+                </button>
+              ) : null
+            }
           />
+          {unlinkError && (
+            <div className="tree-prototype-add-error" role="alert">
+              {unlinkError}
+            </div>
+          )}
+
 
           {knowledgePages.status ===
             'loading' && (
@@ -2246,7 +2303,9 @@ export default function TreePrototype({
               setLinkDraft({
                 fileId: null,
                 fileLabel: '',
+                targetType: 'project',
                 projectId: '',
+                taskId: '',
                 relation: 'reference',
               })
               setLinkError('FILES 뷰에서 파일 행의 링크 버튼을 먼저 눌러주세요.')
@@ -2906,26 +2965,58 @@ export default function TreePrototype({
               </div>
 
               <select
-                value={linkDraft.projectId}
+                value={linkDraft.targetType}
                 onChange={(event) =>
-                  setLinkDraft(
-                    (draft) => ({
-                      ...draft,
-                      projectId: event.target.value,
-                    }),
-                  )
+                  setLinkDraft((draft) => ({
+                    ...draft,
+                    targetType: event.target.value,
+                    projectId: '',
+                    taskId: '',
+                  }))
                 }
-                aria-label="Target project"
+                aria-label="Link target type"
               >
-                <option value="">프로젝트 선택…</option>
-                {(taskTree.root.children || [])
-                  .filter((child) => child.type === 'project')
-                  .map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.label}
-                    </option>
-                  ))}
+                <option value="project">Project</option>
+                <option value="task">Task</option>
               </select>
+
+              {linkDraft.targetType === 'task' ? (
+                <select
+                  value={linkDraft.taskId}
+                  onChange={(event) =>
+                    setLinkDraft((draft) => ({ ...draft, taskId: event.target.value }))
+                  }
+                  aria-label="Target task"
+                >
+                  <option value="">Task 선택…</option>
+                  {(taskTree.root.children || [])
+                    .filter((child) => child.type === 'project')
+                    .flatMap((project) => (project.children || [])
+                      .filter((child) => child.type === 'task')
+                      .map((task) => (
+                        <option key={task.id} value={task.id}>
+                          {project.label} · {task.label}
+                        </option>
+                      ))) }
+                </select>
+              ) : (
+                <select
+                  value={linkDraft.projectId}
+                  onChange={(event) =>
+                    setLinkDraft((draft) => ({ ...draft, projectId: event.target.value }))
+                  }
+                  aria-label="Target project"
+                >
+                  <option value="">프로젝트 선택…</option>
+                  {(taskTree.root.children || [])
+                    .filter((child) => child.type === 'project')
+                    .map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.label}
+                      </option>
+                    ))}
+                </select>
+              )}
 
               <select
                 value={linkDraft.relation}
@@ -2951,7 +3042,9 @@ export default function TreePrototype({
                   disabled={
                     linkBusy ||
                     !linkDraft.fileId ||
-                    !linkDraft.projectId.trim()
+                    (linkDraft.targetType === 'task'
+                      ? !linkDraft.taskId.trim()
+                      : !linkDraft.projectId.trim())
                   }
                 >
                   {linkBusy ? '연결 중…' : 'LINK'}

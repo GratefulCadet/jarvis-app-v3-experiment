@@ -40,14 +40,43 @@ const PLACEHOLDER_ROOT = Object.freeze({
   children: [],
 })
 
+const makeTaskResourceFileNode = (fileNode) => ({
+  id: fileNode.id,
+  label: fileNode.title || fileNode.id,
+  eyebrow: 'FILE',
+  description: fileNode.file?.relative_path || fileNode.file?.id || '',
+  type: 'task_resource',
+  complete: false,
+  fileId: fileNode.file?.id || null,
+  filePath: fileNode.file?.relative_path || null,
+  fileStatus: fileNode.file?.status || 'ok',
+  linkId: fileNode.link_id || null,
+  children: [],
+})
+
+const makeTaskResourceGroupNode = (group) => ({
+  id: group.id,
+  label: group.title || group.id,
+  eyebrow: 'RESOURCES',
+  description: '',
+  type: 'task_resource_group',
+  complete: false,
+  children: (group.children || []).map(makeTaskResourceFileNode),
+})
+
 const makeTaskNode = (task) => ({
   id: task.id,
   label: task.title || task.id,
   eyebrow: 'TASK',
   description: task.reason || '',
   type: 'task',
+  parentId: task.parent_id || null,
+  projectId: task.parent_id || null,
   complete: task.status === 'done',
-  children: [],
+  children: (task.children || []).map((child) => {
+    if (child.type === 'task_resource_group') return makeTaskResourceGroupNode(child)
+    return makeTaskResourceFileNode(child)
+  }),
 })
 
 /*
@@ -420,9 +449,42 @@ export default function useJarvisTree() {
         return { ok: true, created: response.created, link: response.link }
       },
 
-      /* PROJECT PRIMARY WORKSPACE V1 — Project → 논리 WorkspaceRoot 관계 설정.
-         explicit user action → deterministic write. 성공 시 canonical
-         snapshot 재조회로 Workspace 노드를 갱신한다. */
+      async linkTaskFile({ taskId, fileId, relation }) {
+        const api = window.jarvisDiscovery
+        if (!api?.linkTaskFile) {
+          return { ok: false, error: 'jarvisDiscovery.linkTaskFile API 없음 — Electron을 재시작하세요.' }
+        }
+        const tid = typeof taskId === 'string' ? taskId.trim() : ''
+        const fid = typeof fileId === 'string' ? fileId.trim() : ''
+        if (!tid) return { ok: false, error: 'task_id가 비어 있습니다' }
+        if (!fid) return { ok: false, error: 'file_id(FileRef identity)가 비어 있습니다' }
+        const response = await api.linkTaskFile(
+          tid,
+          fid,
+          typeof relation === 'string' && relation.trim() ? relation.trim() : 'reference',
+        )
+        if (!response || response.status !== 'ok') {
+          return { ok: false, error: response?.error || 'Task 리소스 연결에 실패했습니다' }
+        }
+        await fetchSnapshot()
+        return { ok: true, created: response.created, link: response.link }
+      },
+
+
+      async unlinkTaskFile({ linkId }) {
+        const api = window.jarvisDiscovery
+        if (!api?.unlinkTaskFile) {
+          return { ok: false, error: 'jarvisDiscovery.unlinkTaskFile API 없음 — Electron을 재시작하세요.' }
+        }
+        const lid = typeof linkId === 'string' ? linkId.trim() : ''
+        if (!lid) return { ok: false, error: 'link_id가 비어 있습니다' }
+        const response = await api.unlinkTaskFile(lid)
+        if (!response || response.status !== 'ok') {
+          return { ok: false, error: response?.error || 'Task 리소스 연결 해제에 실패했습니다' }
+        }
+        await fetchSnapshot()
+        return { ok: true, removed: response.removed, link: response.link }
+      },
       async setProjectWorkspace({ projectId, rootId }) {
         const api = window.jarvisDiscovery
         if (!api?.setProjectWorkspace) {

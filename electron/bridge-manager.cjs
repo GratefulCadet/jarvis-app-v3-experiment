@@ -197,11 +197,24 @@ class BridgeManager {
     return this._call({ type: 'unlink_project_file', link_id: linkId })
   }
 
+  async linkTaskFile(taskId, fileId, relation) {
+    return this._call({ type: 'link_task_file', task_id: taskId, file_id: fileId, relation })
+  }
+
+  async listTaskResources(taskId) {
+    return this._call({ type: 'list_task_resources', task_id: taskId })
+  }
+
+  async unlinkTaskFile(linkId) {
+    return this._call({ type: 'unlink_task_file', link_id: linkId })
+  }
+
   /* PROJECT PRIMARY WORKSPACE V1 — Project → 논리 WorkspaceRoot 관계 */
 
   async setProjectWorkspace(projectId, rootId) {
     return this._call({ type: 'set_project_workspace', project_id: projectId, root_id: rootId })
   }
+
 
   async getProjectWorkspace(projectId) {
     return this._call({ type: 'get_project_workspace', project_id: projectId })
