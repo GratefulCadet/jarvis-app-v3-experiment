@@ -4,12 +4,10 @@
   "stdin_command": true,
   "stdout_protocol_only": true,
   "stderr_logs": true,
-  "worker_script": "voice-worker/stt_worker.py",
-  "managed_python": "C:\\Users\\USER\\Desktop\\AI_WORKSPACE\\projects\\local-jarvis\\.venv\\Scripts\\python.exe",
-  "start_command_env_path_prefix": "C:\\Users\\USER\\Desktop\\AI_WORKSPACE\\projects\\local-jarvis\\.venv\\Scripts",
   "stdin_line_timeout_s": 20,
   "heartbeat_interval_s": 10,
   "healthy_on": "voice_ready",
   "crash_restart": true,
-  "restart_cooldown_s": 3.0
+  "restart_cooldown_s": 3.0,
+  "managed_python": null
 }

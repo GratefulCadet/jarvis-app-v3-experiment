@@ -17,6 +17,10 @@ dist
 dist-ssr
 *.local
 
+# Whisper model cache (large; set JARVIS_STT_MODEL_DIR for a shared location)
+electron/voice-worker/assets/
+__pycache__/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

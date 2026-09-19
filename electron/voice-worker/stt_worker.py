@@ -34,7 +34,12 @@ def load_json(path: Path) -> Dict[str, Any]:
 CONFIG: Dict[str, Any] = load_json(CONFIG_FILE)
 VOICE_CONFIG: Dict[str, Any] = load_json(VOICE_CONFIG_FILE) if VOICE_CONFIG_FILE.exists() else {}
 
-MODEL_DIR: str = CONFIG.get("model_download_root", str(HERE / "assets" / "stt"))
+# 모델 캐시 위치: JARVIS_STT_MODEL_DIR 환경변수 > STT_CONFIG.json > <worker>/assets/stt
+# 절대 경로를 커밋하지 않기 위한 포터블 기본값 — 환경변수로 머신별 위치를 지정한다.
+MODEL_DIR: str = os.environ.get(
+    "JARVIS_STT_MODEL_DIR",
+    CONFIG.get("model_download_root", str(HERE / "assets" / "stt")),
+)
 LANGUAGE: str = CONFIG.get("language", "ko")
 BEAM_SIZE: int = int(CONFIG.get("beam_size", 5))
 VAD_FILTER_DEFAULT: bool = bool(CONFIG.get("vad_filter", False))

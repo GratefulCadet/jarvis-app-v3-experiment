@@ -20,7 +20,8 @@ const fs = require('node:fs')
 
 const REPO_ROOT = path.resolve(__dirname, '..')
 const WORKER_SCRIPT = path.join(REPO_ROOT, 'electron', 'voice-worker', 'stt_worker.py')
-const LEGACY_PYTHON = 'C:\\Users\\USER\\Desktop\\AI_WORKSPACE\\projects\\local-jarvis\\.venv\\Scripts\\python.exe'
+// Python for the voice worker: env override → PYTHON → PATH (portable; no committed machine path)
+const LEGACY_PYTHON = process.env.JARVIS_VOICE_PYTHON || process.env.PYTHON || 'python'
 
 function send(proc, msg) {
   proc.stdin.write(JSON.stringify(msg) + '\n')

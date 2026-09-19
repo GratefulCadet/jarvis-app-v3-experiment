@@ -5,7 +5,8 @@
   합성 엔진을 런타임 TTS로 쓰지 않는다 — 오직 fixture 생성용.
 #>
 param(
-    [string]$OutPath = "C:\Users\USER\Documents\JARVIS\jarvis-app-v3-harness\data\voice_stt_fixtures\ko_hello_jarvis.wav",
+    # 기본 출력: <repo>/data/voice_stt_fixtures/ko_hello_jarvis.wav ($PSScriptRoot 기준)
+    [string]$OutPath = (Join-Path $PSScriptRoot "..\data\voice_stt_fixtures\ko_hello_jarvis.wav"),
     [string]$Text = "안녕하세요 자비스, 현재 진행 중인 할 일 목록을 보여줘",
     [string]$VoiceName = "Microsoft Heami Desktop",
     [int]$Rate = 1
