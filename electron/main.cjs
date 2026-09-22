@@ -163,16 +163,39 @@ function collapseToPip() {
 }
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  // V4 opens in the Assistant. Keep a centered PiP target for the existing
+  // return-to-PiP interaction without making PiP the startup surface.
+  const initialBounds = {
+    ...screen.getPrimaryDisplay().workArea,
+  }
+
+  savedPipBounds = {
+    x:
+      initialBounds.x +
+      Math.round(
+        (initialBounds.width - PIP_SIZE.width) / 2,
+      ),
+    y:
+      initialBounds.y +
+      Math.round(
+        (initialBounds.height - PIP_SIZE.height) / 2,
+      ),
     width: PIP_SIZE.width,
     height: PIP_SIZE.height,
+  }
+
+  mainWindow = new BrowserWindow({
+    x: initialBounds.x,
+    y: initialBounds.y,
+    width: initialBounds.width,
+    height: initialBounds.height,
 
     frame: false,
 
     transparent: true,
     backgroundColor: '#00000000',
 
-    alwaysOnTop: true,
+    alwaysOnTop: false,
 
     resizable: false,
     maximizable: false,
