@@ -31,6 +31,7 @@ import {
   VolumeX,
   X,
   Zap,
+  PanelLeft,
 } from 'lucide-react'
 
 import ActivityTimeline from './ActivityTimeline'
@@ -81,6 +82,8 @@ export default function CommandCenter({
   executionContext,
   runtime,
   voiceOutput,
+  contextOpen = false,
+  onToggleContext,
 }) {
   const rootRef = useRef(null)
 
@@ -496,12 +499,36 @@ export default function CommandCenter({
               </div>
             </div>
 
+            <button
+              type="button"
+              className={[
+                'jarvis-context-button',
+                contextOpen ? 'is-active' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              onClick={onToggleContext}
+              aria-pressed={contextOpen}
+              aria-label="Toggle JARVIS context"
+              title="Show or hide Projects, Tasks, Files, and Pages"
+            >
+              <PanelLeft size={14} strokeWidth={1.8} aria-hidden="true" />
+              <span>Context</span>
+            </button>
+
             {runtime.scratch && (
               <div className="jarvis-scratch-badge">
                 SCRATCH
               </div>
             )}
           </div>
+
+          {executionContext?.node?.label && (
+            <div className="jarvis-focus-indicator" aria-label="Current focus">
+              <span className="jarvis-focus-label">FOCUS</span>
+              <span>{executionContext.node.label}</span>
+            </div>
+          )}
 
           <form
             className="jarvis-command-form"

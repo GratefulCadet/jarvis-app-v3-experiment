@@ -101,16 +101,9 @@ const APP_INTENT = Object.freeze({
 })
 
 /*
-  Fullscreen 내부 navigation은 Electron/native view와 분리한다.
-
-  VIEW는 PiP ↔ fullscreen window state만 담당하고,
-  FULLSCREEN_SURFACE는 fullscreen 안에서 무엇을 보고 있는지만 담당한다.
+  PiP ↔ fullscreen window transition은 Electron/native view와 분리한다.
+  Fullscreen 내부는 V4 Assistant가 기본 surface이고 Context만 선택적으로 열린다.
 */
-const FULLSCREEN_SURFACE = Object.freeze({
-  SYSTEM: 'system',
-  EXECUTION: 'execution',
-})
-
 const createInitialInteraction =
   () => ({
     view:
@@ -368,16 +361,14 @@ function App() {
   })
 
   const [
-    fullscreenSurface,
-    setFullscreenSurface,
-  ] = useState(
-    FULLSCREEN_SURFACE.SYSTEM,
-  )
-
-  const [
     executionContext,
     setExecutionContext,
   ] = useState(null)
+
+  const [
+    contextOpen,
+    setContextOpen,
+  ] = useState(false)
 
   /*
     Persistent execution state와 transient interaction state를 분리한다.
@@ -746,24 +737,24 @@ function App() {
 
   const showLabel = false
 
-  const showFullscreenSurface =
+  const showAssistantSurface =
     !isPip &&
     phase === PHASE.IDLE
 
+  // V4: the assistant is the only primary fullscreen surface.
+  // Context opens as an optional secondary drawer instead of a mode choice.
   const showCommandCenter =
-    showFullscreenSurface &&
-    fullscreenSurface ===
-      FULLSCREEN_SURFACE.EXECUTION
+    showAssistantSurface
 
   const showTreePrototype =
-    showFullscreenSurface &&
-    fullscreenSurface ===
-      FULLSCREEN_SURFACE.SYSTEM
+    showAssistantSurface &&
+    contextOpen
 
   return (
     <main
       className={[
         'jarvis-shell',
+        'v4-assistant-shell',
         modeClass,
         phaseClass,
         quickPipClass,
@@ -772,9 +763,7 @@ function App() {
         .join(' ')}
       data-view={view}
       data-phase={phase}
-      data-fullscreen-surface={
-        fullscreenSurface
-      }
+      data-context-open={contextOpen ? 'true' : 'false'}
       style={{
         '--pip-offset-x':
           `${pipOffset.x}px`,
@@ -786,80 +775,26 @@ function App() {
       {showCommandCenter && (
         <CommandCenter
           execution={execution}
-          executionContext={
-            executionContext
-          }
+          executionContext={executionContext}
           runtime={runtime}
           voiceOutput={voiceOutput}
+          contextOpen={contextOpen}
+          onToggleContext={() => setContextOpen((open) => !open)}
         />
       )}
 
       {showTreePrototype && (
-        <TreePrototype
-          runtime={runtime}
-          onOpenExecution={(
-            context,
-          ) => {
-            if (context) {
-              setExecutionContext(
-                context,
-              )
-            }
-
-            setFullscreenSurface(
-              FULLSCREEN_SURFACE.EXECUTION,
-            )
-          }}
-        />
-      )}
-
-      {showFullscreenSurface && (
-        <nav
-          className={[
-            'fullscreen-prototype-switch',
-            fullscreenSurface ===
-            FULLSCREEN_SURFACE.EXECUTION
-              ? 'is-execution-dock'
-              : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          aria-label="Prototype fullscreen surface"
-        >
-          <button
-            type="button"
-            className={
-              fullscreenSurface ===
-              FULLSCREEN_SURFACE.SYSTEM
-                ? 'is-active'
-                : ''
-            }
-            onClick={() =>
-              setFullscreenSurface(
-                FULLSCREEN_SURFACE.SYSTEM,
-              )
-            }
-          >
-            SYSTEM
-          </button>
-
-          <button
-            type="button"
-            className={
-              fullscreenSurface ===
-              FULLSCREEN_SURFACE.EXECUTION
-                ? 'is-active'
-                : ''
-            }
-            onClick={() =>
-              setFullscreenSurface(
-                FULLSCREEN_SURFACE.EXECUTION,
-              )
-            }
-          >
-            EXECUTION
-          </button>
-        </nav>
+        <aside className="v4-context-drawer" aria-label="JARVIS context">
+          <TreePrototype
+            runtime={runtime}
+            onOpenExecution={(context) => {
+              if (context) {
+                setExecutionContext(context)
+              }
+              setContextOpen(false)
+            }}
+          />
+        </aside>
       )}
 
       <div className="pip-interaction-zone">
