@@ -371,10 +371,8 @@ function App() {
   ] = useState(false)
 
   /*
-    Persistent execution state와 transient interaction state를 분리한다.
-
-    - execution: Objective / Next Action / Checklist / Timer → 저장 대상
-    - interaction: hover / view transition / animation phase → 저장하지 않음
+    The legacy execution session remains isolated to the PiP compatibility
+    surface. Assistant runtime state is owned only by useJarvisRuntime.
   */
   const execution =
     useExecutionSession()
@@ -774,7 +772,6 @@ function App() {
     >
       {showCommandCenter && (
         <CommandCenter
-          execution={execution}
           executionContext={executionContext}
           runtime={runtime}
           voiceOutput={voiceOutput}
