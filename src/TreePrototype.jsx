@@ -327,6 +327,7 @@ function TreeMapRows({
 
 export default function TreePrototype({
   onOpenExecution,
+  executionContext,
   runtime,
 }) {
   const taskTree =
@@ -1345,6 +1346,14 @@ export default function TreePrototype({
   const focusNode =
     previewNode || node
 
+  const currentProject =
+    [...path].reverse().find((pathNode) => pathNode.type === 'project') || null
+  const focusLabel = executionContext?.node?.label
+  const currentWorkspace =
+    currentProject?.children?.find((child) => child.type === 'workspace_group')?.children?.[0] || null
+  const currentTasks =
+    currentProject?.children?.filter((child) => child.type === 'task') || []
+
   const [
     toneRed,
     toneGreen,
@@ -1383,7 +1392,7 @@ export default function TreePrototype({
   return (
     <section
       className="tree-prototype-interface"
-      aria-label="JARVIS System Home"
+      aria-label="JARVIS Context"
       data-depth={depth}
       data-preview-active={
         previewNode ? 'true' : 'false'
@@ -1470,7 +1479,7 @@ export default function TreePrototype({
             strokeWidth={1.7}
             aria-hidden="true"
           />
-          SYSTEM HOME
+          CONTEXT
         </div>
 
         <div className="tree-prototype-breadcrumb">
@@ -1944,7 +1953,7 @@ export default function TreePrototype({
             strokeWidth={1.7}
             aria-hidden="true"
           />
-          SYSTEM MAP
+          WORK
 
           <button
             type="button"
@@ -1952,7 +1961,8 @@ export default function TreePrototype({
             onClick={() =>
               setDialog('map')
             }
-            aria-label="Open expanded system map"
+            aria-label="Open advanced system map"
+            title="Advanced inspect"
           >
             <Maximize2
               size={11}
@@ -1980,10 +1990,37 @@ export default function TreePrototype({
         </div>
 
         <div className="tree-prototype-overview-list">
+          <section className="v4-context-current" aria-label="Current working context">
+            <div className="v4-context-section-title">CURRENT</div>
+            {focusLabel && (
+              <div className="v4-context-current-row">
+                <span>Focus</span>
+                <strong>{focusLabel}</strong>
+              </div>
+            )}
+            <div className="v4-context-current-row">
+              <span>Project</span>
+              <strong>{currentProject?.label || '선택된 프로젝트 없음'}</strong>
+            </div>
+            <div className="v4-context-current-row">
+              <span>Workspace</span>
+              <strong>
+                {currentWorkspace?.label || '연결된 Workspace 없음'}
+              </strong>
+            </div>
+            {currentProject && (
+              <div className="v4-context-current-row">
+                <span>Tasks</span>
+                <strong>{currentTasks.length}</strong>
+              </div>
+            )}
+          </section>
+
+          <div className="v4-context-section-title v4-context-work-title">WORK</div>
           {visibleRows.length ===
             0 && (
             <div className="tree-prototype-overview-empty">
-              No matching nodes.
+              No matching projects or tasks.
             </div>
           )}
 
@@ -2038,7 +2075,7 @@ export default function TreePrototype({
             'ready' && (
             <div className="tree-prototype-overview-knowledge">
               <div className="tree-prototype-knowledge-title">
-                KNOWLEDGE
+                KNOWLEDGE / PAGES
                 {knowledgePages.scratch && (
                   <span className="tree-prototype-knowledge-scratch">
                     SCRATCH
@@ -2075,7 +2112,7 @@ export default function TreePrototype({
           {files.status === 'error' && (
             <div className="tree-prototype-overview-knowledge">
               <div className="tree-prototype-knowledge-title">
-                FILES
+                WORKSPACE / FILES
               </div>
               <div className="tree-prototype-add-error" role="alert">
                 파일 뷰 새로고침 실패: {files.error || '알 수 없는 오류'}
@@ -2095,7 +2132,7 @@ export default function TreePrototype({
             files.roots.length === 0 && (
             <div className="tree-prototype-overview-knowledge">
               <div className="tree-prototype-knowledge-title">
-                FILES
+                WORKSPACE / FILES
               </div>
               <div className="tree-prototype-overview-empty">
                 연결된 폴더가 없습니다.
@@ -2115,7 +2152,7 @@ export default function TreePrototype({
             files.roots.length > 0 && (
             <div className="tree-prototype-overview-knowledge">
               <div className="tree-prototype-knowledge-title">
-                FILES
+                WORKSPACE / FILES
               </div>
 
               <TreeMapRows

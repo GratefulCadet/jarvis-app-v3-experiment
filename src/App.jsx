@@ -784,6 +784,7 @@ function App() {
         <aside className="v4-context-drawer" aria-label="JARVIS context">
           <TreePrototype
             runtime={runtime}
+            executionContext={executionContext}
             onOpenExecution={(context) => {
               if (context) {
                 setExecutionContext(context)
