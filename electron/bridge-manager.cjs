@@ -185,6 +185,21 @@ class BridgeManager {
     return this._call({ type: 'files_snapshot', root, path: relativePath, depth })
   }
 
+  async readFile(root, relativePath) {
+    return this._call({ type: 'file_read', root, path: relativePath })
+  }
+
+  async writeFile(rootId, fileId, relativePath, content, revision) {
+    return this._call({
+      type: 'file_write',
+      root_id: rootId,
+      file_id: fileId,
+      path: relativePath,
+      content,
+      revision,
+    })
+  }
+
   async linkProjectFile(projectId, fileId, relation) {
     return this._call({ type: 'link_project_file', project_id: projectId, file_id: fileId, relation })
   }

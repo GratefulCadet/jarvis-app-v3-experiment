@@ -148,6 +148,20 @@ contextBridge.exposeInMainWorld(
       })
     },
 
+    readFile: (root, path) => {
+      return ipcRenderer.invoke('jarvis:file-read', { root, path })
+    },
+
+    writeFile: (rootId, fileId, path, content, revision) => {
+      return ipcRenderer.invoke('jarvis:file-write', {
+        rootId,
+        fileId,
+        path,
+        content,
+        revision,
+      })
+    },
+
     /* RESOURCE LINK V1 — Project↔FileRef semantic links.
        linkProjectFile: direct user action → deterministic canonical write.
        file_id는 FileRef identity(f-*)만 — 경로는 bridge가 하드 거부한다. */

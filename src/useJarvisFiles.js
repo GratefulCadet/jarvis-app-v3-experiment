@@ -85,11 +85,27 @@ export default function useJarvisFiles() {
     return fetchSnapshot()
   }, [fetchSnapshot])
 
+  const readFile = useCallback(async (root, path) => {
+    if (!window.jarvisDiscovery?.readFile) {
+      return { status: 'error', error: '파일 읽기 API 없음 — Electron을 재시작하세요.' }
+    }
+    return window.jarvisDiscovery.readFile(root, path)
+  }, [])
+
+  const writeFile = useCallback(async (rootId, fileId, path, content, revision) => {
+    if (!window.jarvisDiscovery?.writeFile) {
+      return { status: 'error', error: '파일 저장 API 없음 — Electron을 재시작하세요.' }
+    }
+    return window.jarvisDiscovery.writeFile(rootId, fileId, path, content, revision)
+  }, [])
+
   return {
     status,
     error,
     roots,
     sections,
     refresh,
+    readFile,
+    writeFile,
   }
 }

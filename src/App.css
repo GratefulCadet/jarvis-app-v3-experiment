@@ -7238,6 +7238,55 @@
     );
 }
 
+/* Human-editable Workspace File MVP */
+.workspace-file-editor {
+  position: fixed;
+  inset: 8vh 8vw;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 18px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 14px;
+  background: rgba(12, 16, 25, .97);
+  box-shadow: 0 24px 80px rgba(0,0,0,.45);
+}
+.workspace-file-editor-header,
+.workspace-file-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.workspace-file-editor-header strong,
+.workspace-file-editor-header span { display: block; }
+.workspace-file-editor-header span { margin-top: 4px; color: rgba(255,255,255,.5); font-size: 11px; }
+.workspace-file-editor-header button { border: 0; background: transparent; color: #fff; font-size: 22px; cursor: pointer; }
+.workspace-file-editor textarea {
+  flex: 1;
+  min-height: 40vh;
+  margin: 16px 0 12px;
+  padding: 14px;
+  resize: none;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  background: rgba(0,0,0,.28);
+  color: rgba(255,255,255,.88);
+  font: 13px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.workspace-file-editor-footer button,
+.workspace-file-editor-message + button { margin-left: 8px; }
+.workspace-file-editor-footer button,
+.workspace-file-editor-message button { padding: 6px 12px; border: 1px solid rgba(255,255,255,.18); border-radius: 6px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
+.workspace-file-editor-footer button:disabled { opacity: .4; cursor: default; }
+.workspace-file-editor-state { color: rgba(255,255,255,.55); font-size: 12px; }
+.workspace-file-editor-state.is-dirty { color: #ffd384; }
+.workspace-file-editor-state.is-conflict,
+.workspace-file-editor-error { color: #ff9a9a; }
+.workspace-file-editor-error { margin-top: 8px; font-size: 12px; }
+.workspace-file-editor-message { padding: 40px 10px; color: rgba(255,255,255,.66); }
+
 /* RESOURCE LINK V1 — FILES 행의 Link to Project 버튼(hover에만 노출) */
 .tree-prototype-map-row-action {
   appearance: none;

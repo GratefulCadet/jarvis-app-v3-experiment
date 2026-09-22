@@ -183,6 +183,25 @@ function registerBridgeIpc({ ipcMain, app }) {
     return manager.filesSnapshot(root || undefined, relativePath || undefined, depth)
   })
 
+  ipcMain.handle('jarvis:file-read', async (_event, payload) => {
+    const root = payload?.root
+    const relativePath = payload?.path
+    if (root !== undefined && root !== null && typeof root !== 'string') return _err('root는 문자열이어야 합니다')
+    if (typeof relativePath !== 'string' || !relativePath.trim()) return _err('path가 필요합니다')
+    return manager.readFile(root || undefined, relativePath.trim())
+  })
+
+  ipcMain.handle('jarvis:file-write', async (_event, payload) => {
+    const rootId = _field(payload, 'rootId', 'root_id')
+    const fileId = _field(payload, 'fileId', 'file_id')
+    const relativePath = _field(payload, 'path', 'relativePath', 'relative_path')
+    const content = payload?.content
+    if (!rootId || !fileId || !relativePath) return _err('root_id, file_id, path가 필요합니다')
+    if (typeof content !== 'string') return _err('content는 문자열이어야 합니다')
+    if (payload?.revision !== undefined && (payload.revision === null || typeof payload.revision !== 'object')) return _err('revision은 객체여야 합니다')
+    return manager.writeFile(rootId, fileId, relativePath, content, payload?.revision)
+  })
+
   ipcMain.handle('jarvis:link-project-file', async (_event, payload) => {
     const projectId = payload?.projectId
     const fileId = payload?.fileId

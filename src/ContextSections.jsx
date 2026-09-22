@@ -19,6 +19,7 @@ export default function ContextSections({
   handleAddFolder,
   makeFileRow,
   openLinkPopover,
+  openFile,
 }) {
   return (
     <>
@@ -126,7 +127,18 @@ export default function ContextSections({
           <TreeMapRows
             rows={files.sections.flatMap((section) => section.entries.map(makeFileRow))}
             currentNodeId={null}
-            goToNode={() => {}}
+            goToNode={(nodeId) => {
+              const entry = files.sections
+                .flatMap((section) => section.entries)
+                .find((candidate) => candidate.id && `file:${candidate.id}` === nodeId)
+              if (entry) openFile({
+                fileId: entry.id,
+                rootId: entry.root_id || files.roots[0],
+                path: entry.path,
+                label: entry.name,
+                text: entry.text,
+              })
+            }}
             onToggleExpanded={() => {}}
             renderRowAction={(rowNode) =>
               rowNode.fileId && rowNode.id.startsWith('file:f-') ? (

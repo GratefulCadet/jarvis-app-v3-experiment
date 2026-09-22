@@ -47,6 +47,7 @@ import useJarvisFiles from './useJarvisFiles'
 
 import useWorkspaceRoots from './useWorkspaceRoots'
 import ContextSections from './ContextSections'
+import FileEditor from './FileEditor'
 
 const SPACE_DOTS = [
   { x: '18%', y: '20%', z: -120, scale: 0.62 },
@@ -370,6 +371,8 @@ export default function TreePrototype({
     dialog,
     setDialog,
   ] = useState(null)
+
+  const [fileEditor, setFileEditor] = useState(null)
 
   const [
     searchText,
@@ -2026,9 +2029,19 @@ export default function TreePrototype({
             handleAddFolder={handleAddFolder}
             makeFileRow={makeFileRow}
             openLinkPopover={openLinkPopover}
+            openFile={setFileEditor}
           />
         </div>
       </aside>
+
+      {fileEditor && (
+        <FileEditor
+          file={fileEditor}
+          readFile={files.readFile}
+          writeFile={files.writeFile}
+          onClose={() => setFileEditor(null)}
+        />
+      )}
 
       <nav
         className="tree-prototype-dock"
