@@ -95,7 +95,11 @@ const eventsToTimeline = (events = []) => {
 const runtimeReducer = (state, event) => {
   switch (event.type) {
     case RUNTIME_EVENT.SUBMIT: {
-      if (state.status === RUNTIME_STATUS.THINKING || state.status === RUNTIME_STATUS.TOOL_RUNNING) {
+      if (
+        state.status === RUNTIME_STATUS.THINKING ||
+        state.status === RUNTIME_STATUS.TOOL_RUNNING ||
+        state.status === RUNTIME_STATUS.AWAITING_CONFIRMATION
+      ) {
         return state
       }
       let next = {
@@ -224,6 +228,7 @@ function getRuntimeApi() {
 export default function useJarvisRuntime() {
   const [state, dispatch] = useReducer(runtimeReducer, undefined, createInitialRuntime)
   const stateRef = useRef(state)
+  const approvalInFlightRef = useRef(false)
 
   useEffect(() => {
     stateRef.current = state
@@ -274,16 +279,26 @@ export default function useJarvisRuntime() {
 
   const approve = useCallback(async () => {
     const api = getRuntimeApi()
-    const toolCall = stateRef.current.toolCall
-    if (!api || !toolCall) return
+    const current = stateRef.current
+    const toolCall = current.toolCall
+    if (
+      !api ||
+      !toolCall ||
+      current.status !== RUNTIME_STATUS.AWAITING_CONFIRMATION ||
+      approvalInFlightRef.current
+    ) return
+
+    approvalInFlightRef.current = true
     dispatch({ type: RUNTIME_EVENT.APPROVE })
     const response = await api.confirm(toolCall)
 
     if (!response || response.status === 'error') {
+      approvalInFlightRef.current = false
       dispatch({ type: RUNTIME_EVENT.ERROR, error: (response && response.error) || 'confirm 실패' })
       return
     }
     if (response.status === 'awaiting_confirmation') {
+      approvalInFlightRef.current = false
       // 승인 후 모델이 새 write를 제안 → 재차단 (설계 동작)
       dispatch({
         type: RUNTIME_EVENT.PERMISSION_REQUIRED,
@@ -295,6 +310,7 @@ export default function useJarvisRuntime() {
       return
     }
     if (response.status === 'final') {
+      approvalInFlightRef.current = false
       dispatch({
         type: RUNTIME_EVENT.APPROVE_RESOLVED,
         text: response.text,
@@ -310,18 +326,29 @@ export default function useJarvisRuntime() {
 
   const reject = useCallback(async () => {
     const api = getRuntimeApi()
-    const toolCall = stateRef.current.toolCall
-    if (!api || !toolCall) return
+    const current = stateRef.current
+    const toolCall = current.toolCall
+    if (
+      !api ||
+      !toolCall ||
+      current.status !== RUNTIME_STATUS.AWAITING_CONFIRMATION ||
+      approvalInFlightRef.current
+    ) return
+
+    approvalInFlightRef.current = true
     dispatch({ type: RUNTIME_EVENT.REJECT })
     const response = await api.reject(toolCall)
     if (!response || response.status === 'error') {
+      approvalInFlightRef.current = false
       dispatch({ type: RUNTIME_EVENT.ERROR, error: (response && response.error) || 'reject 실패' })
       return
     }
+    approvalInFlightRef.current = false
     dispatch({ type: RUNTIME_EVENT.REJECT_RESOLVED, text: response.text })
   }, [])
 
   const dismiss = useCallback(() => {
+    approvalInFlightRef.current = false
     dispatch({ type: RUNTIME_EVENT.DISMISS })
   }, [])
 

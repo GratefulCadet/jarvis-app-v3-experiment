@@ -211,10 +211,7 @@ export default function CommandCenter({
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
               placeholder="Ask JARVIS…"
-              disabled={
-                runtime.status === 'thinking' ||
-                runtime.status === 'tool-running'
-              }
+              disabled={runtimeBusy}
               aria-label="JARVIS command input"
             />
 
@@ -223,8 +220,7 @@ export default function CommandCenter({
               className="jarvis-command-send"
               disabled={
                 !prompt.trim() ||
-                runtime.status === 'thinking' ||
-                runtime.status === 'tool-running'
+                runtimeBusy
               }
             >
               Send

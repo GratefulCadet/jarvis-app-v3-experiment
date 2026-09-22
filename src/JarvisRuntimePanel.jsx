@@ -20,6 +20,16 @@ import {
 
 const SCRATCH_BADGE = 'SCRATCH'
 
+const actionLabel = (toolName) => {
+  const labels = {
+    create_task: 'Create task',
+    update_task: 'Update task',
+    delete_task: 'Delete task',
+  }
+
+  return labels[toolName] || 'Requested action'
+}
+
 export default function JarvisRuntimePanel({
   runtime,
   onApprove,
@@ -82,7 +92,7 @@ export default function JarvisRuntimePanel({
         </div>
 
         <div className="jarvis-permission-action">
-          {toolCall?.name || 'unknown tool'}
+          {actionLabel(toolCall?.name)}
         </div>
 
         {args.title && (
@@ -93,7 +103,7 @@ export default function JarvisRuntimePanel({
 
         <div className="jarvis-permission-meta">
           {args.project_id && (
-            <span>Project: {args.project_id}</span>
+            <span>Project context: selected project</span>
           )}
           {args.reason && (
             <span>Reason: {args.reason}</span>
@@ -109,6 +119,7 @@ export default function JarvisRuntimePanel({
             type="button"
             className="jarvis-approve-button"
             onClick={onApprove}
+            disabled={status !== RUNTIME_STATUS.AWAITING_CONFIRMATION}
           >
             Approve
           </button>
@@ -116,6 +127,7 @@ export default function JarvisRuntimePanel({
             type="button"
             className="jarvis-reject-button"
             onClick={onReject}
+            disabled={status !== RUNTIME_STATUS.AWAITING_CONFIRMATION}
           >
             Reject
           </button>

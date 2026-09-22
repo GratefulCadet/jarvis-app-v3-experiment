@@ -2471,7 +2471,7 @@ export default function TreePrototype({
                     ? '승인된 작업 실행 중…'
                     : runtime?.status ===
                         'awaiting-confirmation'
-                      ? '승인이 필요합니다 — PiP에서 확인하세요'
+                      ? '승인이 필요합니다 — Assistant에서 확인하세요'
                       : 'Thinking…'}
                 </div>
               )}

@@ -649,36 +649,9 @@ function App() {
   }
 
   /*
-    Permission Gate가 걸리면 Command Center에서 작업 중이어도
-    PiP로 돌아와 승인/거절을 보여준다 (Task 3: PiP = 승인 surface).
+    Permission remains on the current surface. The shared runtime state is
+    rendered by both Assistant and PiP; PiP is not a mandatory approval mode.
   */
-  const viewRef = useRef(view)
-  const phaseRef = useRef(phase)
-
-  useEffect(() => {
-    viewRef.current = view
-    phaseRef.current = phase
-  }, [view, phase])
-
-  useEffect(() => {
-    if (
-      runtime.status !==
-        RUNTIME_STATUS.AWAITING_CONFIRMATION
-    ) {
-      return
-    }
-
-    if (
-      viewRef.current ===
-        VIEW.COMMAND_CENTER &&
-      phaseRef.current === PHASE.IDLE
-    ) {
-      requestIntent(
-        APP_INTENT.RETURN_TO_PIP,
-      )
-    }
-  }, [runtime.status])
-
   useEffect(() => {
     const handleKeyDown =
       (event) => {
