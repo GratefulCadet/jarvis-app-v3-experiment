@@ -8,7 +8,6 @@ import {
 import CommandCenter from './CommandCenter'
 import TreePrototype from './TreePrototype'
 import QuickPip from './QuickPip'
-import useExecutionSession from './useExecutionSession'
 import useJarvisRuntime, {
   RUNTIME_STATUS,
 } from './useJarvisRuntime'
@@ -295,9 +294,17 @@ const wait = (duration) =>
 
 const nextFrame = () =>
   new Promise((resolve) => {
-    window.requestAnimationFrame(
-      () => resolve(),
-    )
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      resolve()
+    }
+
+    window.requestAnimationFrame(finish)
+    // Hidden/minimized Electron windows can pause animation frames. Keep
+    // the native transition state machine moving without changing timing.
+    window.setTimeout(finish, 32)
   })
 
 const nextPaint = async () => {
@@ -369,13 +376,6 @@ function App() {
     contextOpen,
     setContextOpen,
   ] = useState(false)
-
-  /*
-    The legacy execution session remains isolated to the PiP compatibility
-    surface. Assistant runtime state is owned only by useJarvisRuntime.
-  */
-  const execution =
-    useExecutionSession()
 
   /*
     JARVIS runtime (Task 2) — PiP와 Command Center가 같은 상태를 구독한다.
@@ -791,17 +791,12 @@ function App() {
           )}
         </section>
 
-        {/*
-          Activation Prototype는 의도적으로 연결하지 않는다.
-
-          기존 Next Action과 다른 제품 역할이 명확해진 뒤에만
-          별도 activation flow를 다시 검토한다.
-          현재 Quick PiP / Timer / Current Step 동작을 우선 보존한다.
-        */}
+        {/* PiP is a compact presence surface over the shared runtime. */}
         <QuickPip
-          execution={execution}
+          executionContext={executionContext}
           runtime={runtime}
           pipMode={isPip}
+          onOpen={openCommandCenter}
         />
       </div>
     </main>

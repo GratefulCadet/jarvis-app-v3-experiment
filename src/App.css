@@ -8929,3 +8929,161 @@
     width: calc(100vw - 40px);
   }
 }
+
+/* ==================================================
+   V4 PiP presence
+   ================================================== */
+
+.pip-presence {
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.pip-presence-orb {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+}
+
+.pip-presence-orb-core {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(244, 253, 255, 1), rgba(126, 219, 255, 0.86) 28%, rgba(34, 142, 194, 0.42) 64%, transparent 100%);
+  box-shadow: 0 0 42px rgba(126, 219, 255, 0.58), 0 0 78px rgba(67, 174, 221, 0.22);
+  animation: pip-presence-breathe 4s ease-in-out infinite;
+}
+
+.pip-presence-orb-ring {
+  position: absolute;
+  inset: 18px;
+  border: 1px solid rgba(126, 219, 255, 0.36);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: pip-presence-orbit 12s linear infinite;
+}
+
+.pip-presence-orb-ring-b {
+  inset: 38px;
+  opacity: 0.64;
+  animation-duration: 18s;
+  animation-direction: reverse;
+}
+
+.pip-presence-orb-trigger {
+  position: absolute;
+  width: 112px;
+  height: 112px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.pip-presence-orb-trigger:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.78);
+  outline-offset: 5px;
+}
+
+.pip-presence-orb.is-thinking .pip-presence-orb-core,
+.pip-presence-orb.is-tool-running .pip-presence-orb-core {
+  animation-duration: 1.4s;
+  transform: scale(1.08);
+}
+
+.pip-presence-orb.is-error .pip-presence-orb-core {
+  background: radial-gradient(circle, rgba(255, 240, 240, 1), rgba(255, 130, 130, 0.84) 30%, rgba(161, 48, 48, 0.42) 66%, transparent 100%);
+  box-shadow: 0 0 42px rgba(255, 116, 116, 0.48);
+}
+
+@keyframes pip-presence-breathe {
+  0%, 100% { opacity: 0.78; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+@keyframes pip-presence-orbit {
+  to { transform: rotate(360deg); }
+}
+
+.pip-presence-copy {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  gap: 3px;
+  width: 190px;
+  transform: translate(-50%, 58px);
+  color: rgba(255, 255, 255, 0.76);
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+}
+
+.pip-presence-name {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+}
+
+.pip-presence-status {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 10px;
+}
+
+.pip-presence-focus {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  max-width: 190px;
+  margin-top: 3px;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pip-presence-focus-label {
+  color: rgba(126, 219, 255, 0.76);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+}
+
+.pip-presence-open,
+.pip-presence-attention {
+  position: absolute;
+  top: calc(50% + 82px);
+  padding: 4px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 9px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.pip-presence-attention {
+  border-color: rgba(255, 160, 160, 0.46);
+  color: rgba(255, 224, 224, 0.86);
+}
+
+.pip-presence > .jarvis-runtime-panel {
+  position: absolute;
+  z-index: 2;
+  width: 224px;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pip-presence-orb-core,
+  .pip-presence-orb-ring {
+    animation: none;
+  }
+}

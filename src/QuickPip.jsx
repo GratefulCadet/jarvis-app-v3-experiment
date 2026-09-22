@@ -1,454 +1,106 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-} from 'react'
-
-import {
-  AnimatePresence,
-  motion,
-} from 'motion/react'
-
-import {
-  TIMER_PRESETS_MINUTES,
-} from './useExecutionSession'
-
-import SevenSegmentTime from './SevenSegmentTime'
+import { RUNTIME_STATUS } from './useJarvisRuntime'
 import JarvisRuntimePanel from './JarvisRuntimePanel'
 
+const PRESENCE_LABELS = {
+  [RUNTIME_STATUS.IDLE]: 'JARVIS',
+  [RUNTIME_STATUS.THINKING]: 'Thinking…',
+  [RUNTIME_STATUS.TOOL_RUNNING]: 'Working…',
+  [RUNTIME_STATUS.AWAITING_CONFIRMATION]: 'Approval required',
+  [RUNTIME_STATUS.DONE]: 'Done',
+  [RUNTIME_STATUS.ERROR]: 'Needs attention',
+}
+
+function PresenceOrb({ status, onOpen }) {
+  return (
+    <div className={`pip-presence-orb is-${status}`}>
+      <div className="pip-presence-orb-core" aria-hidden="true" />
+      <div className="pip-presence-orb-ring pip-presence-orb-ring-a" aria-hidden="true" />
+      <div className="pip-presence-orb-ring pip-presence-orb-ring-b" aria-hidden="true" />
+      <button
+        type="button"
+        className="pip-presence-orb-trigger"
+        onClick={onOpen}
+        aria-label="Open JARVIS Assistant"
+      />
+    </div>
+  )
+}
+
 export default function QuickPip({
-  execution,
+  executionContext,
   runtime,
   pipMode = false,
+  onOpen,
 }) {
-  const {
-    nextAction,
-    timer,
-    timerText,
-    actionComplete,
-    currentItem,
-    actions,
-  } = execution
+  if (!pipMode) {
+    return null
+  }
 
-  const [
-    completedFeedback,
-    setCompletedFeedback,
-  ] = useState(null)
+  const status = runtime.status
+  const focusLabel = executionContext?.node?.label
+  const label = PRESENCE_LABELS[status] || 'JARVIS'
 
-  const [
-    ambientIndex,
-    setAmbientIndex,
-  ] = useState(0)
-
-  /*
-    PiP에서는 조용한 Done chip을 ~6초 뒤 숨기지만,
-    공유 runtime 결과(runtime.dismiss)는 지우지 않는다 —
-    Command Center에서 전체 답변이 계속 남아 있도록.
-
-    hide PiP completion UI ⊥ clear shared runtime result
-  */
-  const [completionHidden, setCompletionHidden] =
-    useState(false)
-
-  useEffect(() => {
-    if (
-      !pipMode ||
-      runtime.status !== 'done'
-    ) {
-      return undefined
-    }
-
-    // 이전에 숨겼던 상태를 먼저 해제(show)한 뒤 6초 후 다시 숨긴다.
-    // 모든 setState는 timeout 안에서 실행되어 effect 본문의
-    // 동기 setState를 피한다 (react-hooks/set-state-in-effect).
-    const showTimer = window.setTimeout(
-      () => setCompletionHidden(false),
-      0,
+  if (status === RUNTIME_STATUS.AWAITING_CONFIRMATION) {
+    return (
+      <aside className="quick-pip pip-presence" aria-label="JARVIS presence">
+        <JarvisRuntimePanel
+          runtime={runtime}
+          onApprove={runtime.approve}
+          onReject={runtime.reject}
+          onDismiss={runtime.dismiss}
+          variant="quiet"
+          pipMode
+        />
+        <button
+          type="button"
+          className="pip-presence-open"
+          onClick={onOpen}
+        >
+          Open Assistant
+        </button>
+      </aside>
     )
-    const hideTimer = window.setTimeout(
-      () => setCompletionHidden(true),
-      6000,
-    )
-
-    return () => {
-      window.clearTimeout(showTimer)
-      window.clearTimeout(hideTimer)
-    }
-  }, [pipMode, runtime.status])
-
-  const feedbackTimerRef =
-    useRef(null)
-
-  useEffect(() => {
-    return () => {
-      if (
-        feedbackTimerRef.current
-      ) {
-        window.clearTimeout(
-          feedbackTimerRef.current,
-        )
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    const intervalId =
-      window.setInterval(
-        () => {
-          setAmbientIndex(
-            (index) =>
-              (index + 1) % 4,
-          )
-        },
-        2600,
-      )
-
-    return () => {
-      window.clearInterval(
-        intervalId,
-      )
-    }
-  }, [])
-
-    const selectedMinutes =
-    Math.round(
-        timer.originalDurationMs /
-        60_000,
-    )
-
-    const isPresetDuration =
-    TIMER_PRESETS_MINUTES.includes(
-        selectedMinutes,
-    )
-
-    const customDurationHours =
-    Math.floor(
-        selectedMinutes / 60,
-    )
-
-    const customDurationMinutes =
-    selectedMinutes % 60
-
-    const customDurationLabel = [
-    customDurationHours > 0
-        ? `${customDurationHours}h`
-        : '',
-    customDurationMinutes > 0
-        ? `${customDurationMinutes}m`
-        : '',
-    ]
-    .filter(Boolean)
-    .join(' ')
-
-  const handleCompleteCurrentItem =
-    () => {
-      if (!currentItem) {
-        return
-      }
-
-      setCompletedFeedback(
-        currentItem.text,
-      )
-
-      actions.toggleChecklistItem(
-        currentItem.id,
-      )
-
-      if (
-        feedbackTimerRef.current
-      ) {
-        window.clearTimeout(
-          feedbackTimerRef.current,
-        )
-      }
-
-      feedbackTimerRef.current =
-        window.setTimeout(
-          () => {
-            setCompletedFeedback(
-              null,
-            )
-          },
-          420,
-        )
-    }
-
-  const visibleStepText =
-    completedFeedback ||
-    currentItem?.text ||
-    'Current action complete'
-
-  const stepIsComplete =
-    Boolean(
-      completedFeedback,
-    ) || !currentItem
-
-  const ambientItems = [
-    {
-      label: 'WEATHER',
-      text: 'Clear focus window',
-    },
-    {
-      label: 'EXECUTION',
-      text: `${visibleStepText} · ${timerText}`,
-    },
-    {
-      label: 'NOTE',
-      text: 'Keep the next move small',
-    },
-    {
-      label: 'TODAY',
-      text: 'Review priority after this run',
-    },
-  ]
-
-  const ambientItem =
-    ambientItems[
-      ambientIndex %
-        ambientItems.length
-    ]
+  }
 
   return (
     <aside
-      className="quick-pip"
-      aria-label="JARVIS quick interaction"
+      className="quick-pip pip-presence"
+      aria-label="JARVIS presence"
+      data-status={status}
     >
-      <JarvisRuntimePanel
-        runtime={runtime}
-        onApprove={runtime.approve}
-        onReject={runtime.reject}
-        onDismiss={runtime.dismiss}
-        variant="quiet"
-        pipMode={pipMode}
-        hideDone={completionHidden}
-      >
-      <div className="quick-pip-next-action">
-        <div className="quick-pip-text-loop">
-          <span className="quick-pip-text-loop-label">
-            {ambientItem.label}
+      <PresenceOrb status={status} onOpen={onOpen} />
+      <div className="pip-presence-copy" aria-live="polite">
+        <span className="pip-presence-name">JARVIS</span>
+        <span className="pip-presence-status">{label}</span>
+        {focusLabel && (
+          <span className="pip-presence-focus">
+            <span className="pip-presence-focus-label">FOCUS</span>
+            <span>{focusLabel}</span>
           </span>
-
-          <AnimatePresence
-            initial={false}
-            mode="wait"
-          >
-            <motion.span
-              key={`${ambientItem.label}-${ambientItem.text}`}
-              className="quick-pip-text-loop-value"
-              initial={{
-                opacity: 0,
-                y: 6,
-                filter: 'blur(3px)',
-              }}
-              animate={{
-                opacity: 1,
-                y: 0,
-                filter: 'blur(0px)',
-              }}
-              exit={{
-                opacity: 0,
-                y: -5,
-                filter: 'blur(3px)',
-              }}
-              transition={{
-                duration: 0.24,
-                ease: [
-                  0.22,
-                  1,
-                  0.36,
-                  1,
-                ],
-              }}
-            >
-              {ambientItem.text}
-            </motion.span>
-          </AnimatePresence>
-        </div>
-
-        <span className="quick-pip-kicker">
-          {actionComplete
-            ? 'NEXT ACTION : COMPLETE'
-            : 'NEXT ACTION'}
-        </span>
-
-        <span
-          className={[
-            'quick-pip-action-text',
-            actionComplete
-              ? 'is-complete'
-              : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-        >
-          {nextAction ||
-            'Continue JARVIS prototype'}
-        </span>
-      </div>
-
-
-      <div
-        className="quick-pip-timer"
-        aria-label="Focus timer"
-      >
-        <SevenSegmentTime
-          value={timerText}
-        />
-
-        {timer.status ===
-          'idle' && (
-          <select
-  className="quick-pip-duration-select"
-  value={
-    isPresetDuration
-      ? String(
-          selectedMinutes,
-        )
-      : 'custom'
-  }
-  onChange={(event) => {
-    if (
-      event.target.value ===
-      'custom'
-    ) {
-      return
-    }
-
-    actions.setDurationMinutes(
-      event.target.value,
-    )
-  }}
-  aria-label="Timer duration"
->
-  {!isPresetDuration && (
-    <option value="custom">
-      {customDurationLabel ||
-        'Custom'}
-    </option>
-  )}
-
-  {TIMER_PRESETS_MINUTES.map(
-    (minutes) => (
-      <option
-        key={minutes}
-        value={minutes}
-      >
-        {minutes} min
-      </option>
-    ),
-  )}
-</select>
         )}
-
-        <div className="quick-pip-timer-actions">
-          {timer.status ===
-            'idle' && (
-            <button
-              type="button"
-              className="quick-pip-mini-button"
-              onClick={actions.start}
-            >
-              <motion.span
-                layout
-              >
-                START
-              </motion.span>
-            </button>
-          )}
-
-          {timer.status ===
-            'active' && (
-            <button
-              type="button"
-              className="quick-pip-mini-button quick-pip-pause-resume-button"
-              onClick={actions.pause}
-            >
-              <motion.span
-                layout
-              >
-                PAUSE
-              </motion.span>
-            </button>
-          )}
-
-          {timer.status ===
-            'paused' && (
-            <button
-              type="button"
-              className="quick-pip-mini-button quick-pip-pause-resume-button"
-              onClick={actions.resume}
-            >
-              <motion.span
-                layout
-              >
-                RESUME
-              </motion.span>
-            </button>
-          )}
-
-          {(timer.status ===
-            'done' ||
-            timer.status ===
-              'ended') && (
-            <span className="quick-pip-open-main-hint">
-                Open JARVIS to continue
-            </span>
-          )}
-        </div>
       </div>
 
-      <div
-        className={[
-          'quick-pip-current-step',
-          stepIsComplete
-            ? 'is-complete'
-            : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-      >
+      {status === RUNTIME_STATUS.DONE && (
+        <JarvisRuntimePanel
+          runtime={runtime}
+          onApprove={runtime.approve}
+          onReject={runtime.reject}
+          onDismiss={runtime.dismiss}
+          variant="quiet"
+          pipMode
+          hideDone={false}
+        />
+      )}
+
+      {status === RUNTIME_STATUS.ERROR && (
         <button
           type="button"
-          className="quick-pip-current-step-toggle"
-          onClick={
-            handleCompleteCurrentItem
-          }
-          disabled={
-            !currentItem ||
-            Boolean(
-              completedFeedback,
-            ) ||
-            timer.status ===
-              'done' ||
-            timer.status ===
-              'ended'
-          }
-          aria-label={
-            currentItem
-              ? `Complete ${currentItem.text}`
-              : 'Current action complete'
-          }
+          className="pip-presence-attention"
+          onClick={onOpen}
         >
-          {stepIsComplete
-            ? '✓'
-            : '○'}
+          Open Assistant
         </button>
-
-        <div className="quick-pip-current-step-copy">
-            <span className="quick-pip-current-step-label">
-            {stepIsComplete && (
-            <span className="quick-pip-current-step-label">
-            CLEARED
-        </span>
-)}
-          </span>
-
-          <span className="quick-pip-current-step-text">
-            {visibleStepText}
-          </span>
-        </div>
-      </div>
-      </JarvisRuntimePanel>
+      )}
     </aside>
   )
 }
