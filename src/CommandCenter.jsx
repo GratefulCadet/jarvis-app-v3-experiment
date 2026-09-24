@@ -11,6 +11,7 @@ import {
 } from 'animejs'
 
 import {
+  FileText,
   Mic,
   PanelLeft,
   Volume2,
@@ -34,6 +35,7 @@ export default function CommandCenter({
   executionContext,
   runtime,
   voiceOutput,
+  activeFile,
   contextOpen = false,
   onToggleContext,
 }) {
@@ -110,7 +112,16 @@ export default function CommandCenter({
       return
     }
 
-    runtime.submit(trimmed, runtime.projectId)
+    runtime.submit(trimmed, runtime.projectId, {
+      activeFile: activeFile
+        ? {
+            fileId: activeFile.fileId,
+            rootId: activeFile.rootId,
+            path: activeFile.path,
+            label: activeFile.label,
+          }
+        : null,
+    })
     setPrompt('')
   }
 
@@ -168,6 +179,24 @@ export default function CommandCenter({
           </div>
 
           <FocusIndicator executionContext={executionContext} />
+
+          {/*
+            Active File 칩 — 열려 있는 파일이 있을 때만 표시되는 compact 표시.
+            경로는 사람이 읽는 표시용이고 내부 ID는 노출하지 않는다.
+          */}
+          {activeFile?.path && (
+            <div
+              className="jarvis-active-file-chip"
+              title={activeFile.path}
+            >
+              <FileText
+                size={12}
+                strokeWidth={1.8}
+                aria-hidden="true"
+              />
+              <span>{activeFile.label || activeFile.path}</span>
+            </div>
+          )}
 
           <form
             className="jarvis-command-form"

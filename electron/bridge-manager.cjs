@@ -133,8 +133,22 @@ class BridgeManager {
 
   /* ---- 공개 API ---- */
 
-  async chat(text, projectId) {
-    return this._call({ type: 'chat', text, project_id: projectId })
+  /*
+    activeFile: 열려 있는 파일의 identity locator {fileId, rootId, path, label}만
+    전달한다(내용 없음). JSONL 브리지의 active_file 필드로 정규화 — Python 쪽에서
+    4개 필드만 남기고 정화한다.
+  */
+  async chat(text, projectId, activeFile) {
+    const message = { type: 'chat', text, project_id: projectId }
+    if (activeFile && typeof activeFile === 'object') {
+      message.active_file = {
+        file_id: activeFile.fileId,
+        root_id: activeFile.rootId,
+        path: activeFile.path,
+        name: activeFile.label,
+      }
+    }
+    return this._call(message)
   }
 
   async confirm(toolCall) {

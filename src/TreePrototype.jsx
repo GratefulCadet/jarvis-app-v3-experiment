@@ -331,6 +331,9 @@ export default function TreePrototype({
   onOpenExecution,
   executionContext,
   runtime,
+  fileEditor,
+  openFile: setFileEditor,
+  closeFile,
 }) {
   const taskTree =
     useJarvisTree()
@@ -372,7 +375,10 @@ export default function TreePrototype({
     setDialog,
   ] = useState(null)
 
-  const [fileEditor, setFileEditor] = useState(null)
+  /*
+    Active File — 열린 파일 편집기 state는 App이 소유한다(V4 Active File
+    컨텍스트). TreePrototype은 열기/닫기 콜백만 받는다.
+  */
 
   const [
     searchText,
@@ -2039,7 +2045,7 @@ export default function TreePrototype({
           file={fileEditor}
           readFile={files.readFile}
           writeFile={files.writeFile}
-          onClose={() => setFileEditor(null)}
+          onClose={closeFile}
         />
       )}
 

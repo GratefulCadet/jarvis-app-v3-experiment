@@ -247,7 +247,12 @@ export default function useJarvisRuntime() {
       text: trimmed,
       source: options && options.source === 'voice' ? 'voice' : 'text',
     })
-    const response = await api.chat(trimmed, projectId || DEFAULT_PROJECT)
+    /*
+      Active File — 열려 있는 파일의 identity locator만 전송한다(내용 없음).
+      JARVIS는 기존 read 경로로 저장된 현재 파일시스템 내용을 스스로 읽는다.
+    */
+    const activeFile = options && options.activeFile
+    const response = await api.chat(trimmed, projectId || DEFAULT_PROJECT, activeFile)
 
     if (!response || response.status === 'error') {
       dispatch({ type: RUNTIME_EVENT.ERROR, error: (response && response.error) || '브리지 응답이 없습니다' })

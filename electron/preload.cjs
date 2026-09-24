@@ -37,12 +37,13 @@ contextBridge.exposeInMainWorld(
       return ipcRenderer.invoke('jarvis:ping')
     },
 
-    chat: (text, projectId) => {
+    chat: (text, projectId, activeFile) => {
       return ipcRenderer.invoke(
         'jarvis:chat',
         {
           text,
           projectId,
+          activeFile,
         },
       )
     },

@@ -61,10 +61,11 @@ function registerBridgeIpc({ ipcMain, app }) {
   ipcMain.handle('jarvis:chat', async (_event, payload) => {
     const text = payload?.text
     const projectId = payload?.projectId
+    const activeFile = payload?.activeFile
     if (typeof text !== 'string' || !text.trim()) {
       return { type: 'response', status: 'error', error: '요청 문구가 비어 있습니다' }
     }
-    return manager.chat(text, projectId || 'jarvis-app')
+    return manager.chat(text, projectId || 'jarvis-app', activeFile)
   })
 
   ipcMain.handle('jarvis:confirm', async (_event, payload) => {

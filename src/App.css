@@ -8026,6 +8026,26 @@
   background: transparent;
 }
 
+/* Active File 칩 — 열린 파일이 있을 때만 Assistant 헤더에 표시. */
+.jarvis-active-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  max-width: 100%;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.jarvis-active-file-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .jarvis-permission-action {
   font-size: 15px;
   font-weight: 600;

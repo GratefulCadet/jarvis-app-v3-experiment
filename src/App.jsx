@@ -378,6 +378,16 @@ function App() {
   ] = useState(false)
 
   /*
+    Active File — 현재 열려 있는 파일 편집기 단일 소유 state. FileEditor
+    프롭 그대로(fileId·rootId·path·label). 닫으면 null → "Active File 없음".
+    Transient: reload 시 자연 소멸하며 별도 저장소를 만들지 않는다.
+  */
+  const [
+    fileEditor,
+    setFileEditor,
+  ] = useState(null)
+
+  /*
     JARVIS runtime (Task 2) — PiP와 Command Center가 같은 상태를 구독한다.
     Freebuff는 runtime 밖에 있다: Qwen + Harness + Permission Gate 전부
     Electron이 spawn한 Python bridge가 담당한다.
@@ -748,6 +758,7 @@ function App() {
           executionContext={executionContext}
           runtime={runtime}
           voiceOutput={voiceOutput}
+          activeFile={fileEditor}
           contextOpen={contextOpen}
           onToggleContext={() => setContextOpen((open) => !open)}
         />
@@ -758,6 +769,9 @@ function App() {
           <TreePrototype
             runtime={runtime}
             executionContext={executionContext}
+            fileEditor={fileEditor}
+            openFile={setFileEditor}
+            closeFile={() => setFileEditor(null)}
             onOpenExecution={(context) => {
               if (context) {
                 setExecutionContext(context)
