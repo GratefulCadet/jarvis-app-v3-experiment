@@ -39,11 +39,9 @@ export default function FileEditor({ file, readFile, writeFile, onClose }) {
     return () => window.clearTimeout(timer)
   }, [editable, file, load])
 
-  if (!file) return null
-
   const dirty = state === 'dirty' || state === 'saving'
-  const save = async () => {
-    if (!revision || state === 'saving') return
+  const save = useCallback(async () => {
+    if (!file || !revision || state === 'saving') return
     setState('saving')
     setMessage('')
     const result = await writeFile(file.rootId, file.fileId, file.path, content, revision)
@@ -55,7 +53,37 @@ export default function FileEditor({ file, readFile, writeFile, onClose }) {
     setRevision(result.revision || revision)
     setState('saved')
     setMessage('Saved')
-  }
+  }, [content, file, revision, state, writeFile])
+
+  const handleClose = useCallback(() => {
+    if (state === 'dirty') {
+      const confirmClose = window.confirm('저장되지 않은 변경사항이 있습니다. 닫으시겠습니까?')
+      if (!confirmClose) return
+    }
+    onClose?.()
+  }, [onClose, state])
+
+  useEffect(() => {
+    if (!file) return undefined
+
+    const handleKeyDown = (event) => {
+      if ((event.ctrlKey || event.metaKey) && (event.key === 's' || event.key === 'S')) {
+        event.preventDefault()
+        if (dirty && state !== 'saving' && state !== 'loading') {
+          void save()
+        }
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        handleClose()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [dirty, file, handleClose, save, state])
+
+  if (!file) return null
 
   return (
     <section className="workspace-file-editor" aria-label={`Edit ${file.label}`}>
@@ -64,7 +92,7 @@ export default function FileEditor({ file, readFile, writeFile, onClose }) {
           <strong>{file.label}</strong>
           <span>{file.path}</span>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close file editor">×</button>
+        <button type="button" onClick={handleClose} aria-label="Close file editor">×</button>
       </header>
       {!editable || state === 'unsupported' ? (
         <div className="workspace-file-editor-message">이 파일 형식은 편집할 수 없습니다. 읽기 전용입니다.</div>

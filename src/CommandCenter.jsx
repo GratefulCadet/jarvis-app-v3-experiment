@@ -14,8 +14,10 @@ import {
   FileText,
   Mic,
   PanelLeft,
+  Sparkles,
   Volume2,
   VolumeX,
+  X,
 } from 'lucide-react'
 
 import ActivityTimeline from './ActivityTimeline'
@@ -36,6 +38,7 @@ export default function CommandCenter({
   runtime,
   voiceOutput,
   activeFile,
+  onCloseActiveFile,
   contextOpen = false,
   onToggleContext,
 }) {
@@ -130,6 +133,20 @@ export default function CommandCenter({
     runtime.status === 'tool-running' ||
     runtime.status === 'awaiting-confirmation'
 
+  const handleQuickAction = (quickPromptText) => {
+    if (runtimeBusy) return
+    runtime.submit(quickPromptText, runtime.projectId, {
+      activeFile: activeFile
+        ? {
+            fileId: activeFile.fileId,
+            rootId: activeFile.rootId,
+            path: activeFile.path,
+            label: activeFile.label,
+          }
+        : null,
+    })
+  }
+
   return (
     <section
       ref={rootRef}
@@ -181,20 +198,67 @@ export default function CommandCenter({
           <FocusIndicator executionContext={executionContext} />
 
           {/*
-            Active File 칩 — 열려 있는 파일이 있을 때만 표시되는 compact 표시.
-            경로는 사람이 읽는 표시용이고 내부 ID는 노출하지 않는다.
+            Active File 칩 & Context Quick Actions (Cursor/Raycast benchmarked)
+            열려 있는 파일이 있을 때 사람이 읽는 경로와 함께 원클릭 빠른 액션 제공
           */}
           {activeFile?.path && (
-            <div
-              className="jarvis-active-file-chip"
-              title={activeFile.path}
-            >
-              <FileText
-                size={12}
-                strokeWidth={1.8}
-                aria-hidden="true"
-              />
-              <span>{activeFile.label || activeFile.path}</span>
+            <div className="jarvis-active-file-container">
+              <div
+                className="jarvis-active-file-chip"
+                title={activeFile.path}
+              >
+                <FileText
+                  size={12}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
+                <span>{activeFile.label || activeFile.path}</span>
+                {onCloseActiveFile && (
+                  <button
+                    type="button"
+                    className="jarvis-active-file-close"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onCloseActiveFile()
+                    }}
+                    title="Remove active file context"
+                    aria-label="Remove active file context"
+                  >
+                    <X size={10} strokeWidth={2} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+
+              <div className="jarvis-quick-actions" aria-label="Quick actions for active file">
+                <button
+                  type="button"
+                  className="jarvis-quick-action-btn"
+                  onClick={() => handleQuickAction(`이 파일(${activeFile.label || activeFile.path})의 내용을 핵심 위주로 요약해줘.`)}
+                  disabled={runtimeBusy}
+                  title="파일 내용 요약 요청"
+                >
+                  <Sparkles size={11} strokeWidth={1.8} aria-hidden="true" />
+                  <span>요약</span>
+                </button>
+                <button
+                  type="button"
+                  className="jarvis-quick-action-btn"
+                  onClick={() => handleQuickAction(`이 파일(${activeFile.label || activeFile.path})의 구조와 주요 로직을 설명해줘.`)}
+                  disabled={runtimeBusy}
+                  title="코드/문서 구조 설명 요청"
+                >
+                  <span>구조 설명</span>
+                </button>
+                <button
+                  type="button"
+                  className="jarvis-quick-action-btn"
+                  onClick={() => handleQuickAction(`이 파일(${activeFile.label || activeFile.path})에서 개선할 점이나 잠재적 버그를 검토해줘.`)}
+                  disabled={runtimeBusy}
+                  title="코드 리뷰 및 개선점 검토"
+                >
+                  <span>개선점 검토</span>
+                </button>
+              </div>
             </div>
           )}
 

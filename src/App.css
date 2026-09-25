@@ -8026,24 +8026,83 @@
   background: transparent;
 }
 
-/* Active File 칩 — 열린 파일이 있을 때만 Assistant 헤더에 표시. */
+/* Active File 칩 & 컨텍스트 퀵 액션 컨테이너 */
+.jarvis-active-file-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .jarvis-active-file-chip {
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin-top: 6px;
+  gap: 6px;
   max-width: 100%;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 999px;
-  padding: 3px 10px;
+  padding: 3px 8px 3px 10px;
+}
+
+.jarvis-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.jarvis-quick-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 11px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.jarvis-quick-action-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.jarvis-quick-action-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .jarvis-active-file-chip span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.jarvis-active-file-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.jarvis-active-file-close:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
 }
 
 .jarvis-permission-action {

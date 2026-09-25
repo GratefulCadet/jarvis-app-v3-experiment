@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useReducer,
   useRef,
@@ -461,7 +462,7 @@ function App() {
   }
 
   const openCommandCenter =
-    async () => {
+    useCallback(async () => {
       if (
         view !== VIEW.PIP ||
         phase !== PHASE.IDLE
@@ -533,10 +534,10 @@ function App() {
         type:
           APP_EVENT.OPEN_COMPLETE,
       })
-    }
+    }, [phase, view])
 
   const returnToPip =
-    async () => {
+    useCallback(async () => {
       if (
         view !==
           VIEW.COMMAND_CENTER ||
@@ -612,7 +613,7 @@ function App() {
         type:
           APP_EVENT.CLOSE_COMPLETE,
       })
-    }
+    }, [phase, view])
 
   /*
     Input source를 product intent로 한 번 변환한다.
@@ -624,7 +625,7 @@ function App() {
     나중에 wheel / keyboard shortcut / gesture가 생겨도
     transition 구현을 복제하지 않고 같은 intent를 요청하면 된다.
   */
-  const requestIntent = (
+  const requestIntent = useCallback((
     intent,
   ) => {
     if (phase !== PHASE.IDLE) {
@@ -648,7 +649,7 @@ function App() {
     ) {
       returnToPip()
     }
-  }
+  }, [openCommandCenter, phase, returnToPip, view])
 
   const handleCoreClick = () => {
     requestIntent(
@@ -680,6 +681,18 @@ function App() {
           return
         }
 
+        // If fileEditor or context drawer is open, dismiss that first before collapsing to PiP
+        if (fileEditor) {
+          // Handled by FileEditor's capturing keydown listener
+          return
+        }
+
+        if (contextOpen) {
+          event.preventDefault()
+          setContextOpen(false)
+          return
+        }
+
         event.preventDefault()
 
         requestIntent(
@@ -698,7 +711,7 @@ function App() {
         handleKeyDown,
       )
     }
-  }, [view, phase])
+  }, [view, phase, fileEditor, contextOpen, requestIntent])
 
   const phaseClass =
     phase === PHASE.IDLE
@@ -759,6 +772,7 @@ function App() {
           runtime={runtime}
           voiceOutput={voiceOutput}
           activeFile={fileEditor}
+          onCloseActiveFile={() => setFileEditor(null)}
           contextOpen={contextOpen}
           onToggleContext={() => setContextOpen((open) => !open)}
         />
