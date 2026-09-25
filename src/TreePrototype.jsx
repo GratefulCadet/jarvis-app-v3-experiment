@@ -589,6 +589,30 @@ export default function TreePrototype({
     }
   }, [expandedNodeIds])
 
+  /*
+    Qwen이 만든 task 변경을 트리가 따라간다.
+
+    Tree에서 직접 하는 변경은 useJarvisTree가 이미 재조회하지만, 모델이 tool
+    loop으로 만든(create_task) 변경은 그 경로를 타지 않아 사용자가 수동 refresh
+    전까지 트리가 낡아 있었다. runtime.taskStateRevision이 올라올 때만 —
+    실제 실행된 write tool이 있을 때만 올라간다 — canonical snapshot으로 다시 읽는다.
+  */
+  const taskStateRevision =
+    runtime?.taskStateRevision || 0
+
+  /*
+    taskTree 객체는 렌더마다 새로 만들어지므로 의존성에 넣으면 매 렌더마다
+    다시 돌고, 다시 조회한 결과로 다시 렌더되는 순간 무한 반복이 된다.
+    refresh는 useCallback으로 고정된 참조이므로 이것만 넣는다.
+  */
+  const refreshTaskTree =
+    taskTree.refresh
+
+  useEffect(() => {
+    if (taskStateRevision === 0) return
+    refreshTaskTree()
+  }, [taskStateRevision, refreshTaskTree])
+
   const visibleMapNodes =
     flatNodes.filter((entry) => {
       const query =

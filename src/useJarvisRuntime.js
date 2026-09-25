@@ -65,12 +65,49 @@ const createInitialRuntime = () => ({
     닫을 때까지 유지된다.
   */
   resumeBriefing: null,
+  /*
+    Task 상태 변경 신호 — Qwen이 tool loop으로 task를 실제로 변경했을 때만 올라간다.
+
+    Tree에서 직접 하는 변경(create/update/delete)은 useJarvisTree가 이미
+    canonical snapshot으로 재조회한다. 모델이 만든 변경은 그 경로를 타지 않아
+    트리가 수동 refresh까지 낡아 있었다. 이 카운터가 올라가면 트리가 스스로
+    재조회한다. boolean이 아니라 단조 카운터인 이유는 같은 값으로 반복 렌더링되어
+    effect가 다시 돌지 않기 때문이다.
+  */
+  taskStateRevision: 0,
 })
 
 const pushTimeline = (state, entry) => ({
   ...state,
   timeline: [...state.timeline, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, ...entry }],
 })
+
+/*
+  모델 tool loop으로 task 상태를 바꾸는 도구.
+
+  registry에서 write 분류인 것은 create_task 하나뿐이며, 나머지 task 변경은
+  Tree가 deterministic bridge message로 직접 보낸다(그쪽은 이미 refresh된다).
+  도구가 추가되면 여기에 한 줄만 더하면 되고, 트리는 그때부터 따라간다.
+*/
+const TASK_MUTATING_TOOLS = new Set(['create_task'])
+
+/*
+  이 응답이 task 상태를 실제로 바꿨는지 판정.
+
+  ok가 true인 실행만 센다 — awaiting_confirmation으로 막힌 call은
+  requires_confirmation이고 handler가 실행되지 않았으므로 상태가 바뀌지 않았다.
+  그걸 세면 사용자가 승인도 하지 않은 작업을 트리가 되돌아가며 갱신한다.
+*/
+export const eventsMutatedTasks = (events = []) => {
+  for (const event of events) {
+    if (!event || event.kind !== 'tool') continue
+    if (!TASK_MUTATING_TOOLS.has(event.name)) continue
+    if (event.requires_confirmation) continue
+    if (event.ok !== true) continue
+    return true
+  }
+  return false
+}
 
 /*
   bridge 응답의 events(trace에서 추출한 실제 tool 실행)를 timeline으로 변환.
@@ -152,6 +189,9 @@ const runtimeReducer = (state, event) => {
         scratch: Boolean(event.scratch),
         resumeBriefing:
           extractResumeBriefing(event.events) || state.resumeBriefing,
+        taskStateRevision: eventsMutatedTasks(event.events)
+          ? state.taskStateRevision + 1
+          : state.taskStateRevision,
       }
       const toolEntries = eventsToTimeline(event.events)
       let next = base
@@ -178,6 +218,10 @@ const runtimeReducer = (state, event) => {
         scratch: Boolean(event.scratch),
         resumeBriefing:
           extractResumeBriefing(event.events) || state.resumeBriefing,
+        // 승인이 실제 실행으로 이어진 경우 — 여기서 task가 처음으로 바뀐다.
+        taskStateRevision: eventsMutatedTasks(event.events)
+          ? state.taskStateRevision + 1
+          : state.taskStateRevision,
       }
       const approved = pushTimeline(
         base,
