@@ -8078,6 +8078,56 @@
   cursor: not-allowed;
 }
 
+/* M2 — Active File → focused Task 연결 버튼 (명시적 사용자 행동만) */
+.jarvis-focus-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.jarvis-link-file-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.jarvis-link-file-btn:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
+.jarvis-link-file-btn.is-linked {
+  border-color: rgba(166, 229, 196, 0.5);
+  color: #a6e5c4;
+  cursor: default;
+}
+
+.jarvis-link-file-btn.is-error {
+  border-color: rgba(255, 154, 154, 0.5);
+  color: #ff9a9a;
+}
+
+.jarvis-link-file-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.jarvis-link-file-error {
+  font-size: 10px;
+  color: #ff9a9a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Resume Briefing (M1 — 복귀 → 이어서 시작) */
 .jarvis-resume-briefing {
   margin-top: 10px;
@@ -8213,6 +8263,10 @@
   margin-top: 8px;
   font-size: 10px;
   color: rgba(255, 255, 255, 0.45);
+}
+
+.jarvis-resume-next-files {
+  color: rgba(166, 229, 196, 0.85) !important;
 }
 
 .jarvis-active-file-chip span {

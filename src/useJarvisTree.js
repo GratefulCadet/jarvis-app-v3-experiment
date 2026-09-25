@@ -5,6 +5,12 @@ import {
   useState,
 } from 'react'
 
+import {
+  linkProjectFile as linkProjectFileRequest,
+  linkTaskFile as linkTaskFileRequest,
+  unlinkTaskFile as unlinkTaskFileRequest,
+} from './jarvisLinkApi'
+
 /*
   실제 JARVIS state → SYSTEM MAP read adapter (데이터 모델 수렴).
 
@@ -428,62 +434,29 @@ export default function useJarvisTree() {
          deterministic canonical write. UI 선택값(project/file/relation)만
          전달하고, 성공 시 canonical snapshot을 다시 읽어 UI를 갱신한다. */
       async linkProjectFile({ projectId, fileId, relation }) {
-        const api = window.jarvisDiscovery
-        if (!api?.linkProjectFile) {
-          return { ok: false, error: 'jarvisDiscovery.linkProjectFile API 없음 — Electron을 재시작하세요.' }
+        // 공용 canonical 래퍼(jarvisLinkApi)로 정규화 위임 — 동일 경로 유지
+        const result = await linkProjectFileRequest({ projectId, fileId, relation })
+        if (result.ok) {
+          // 성공 — canonical state에서 fresh snapshot으로 UI 갱신 (수동 패치 금지)
+          await fetchSnapshot()
         }
-        const p = typeof projectId === 'string' ? projectId.trim() : ''
-        const f = typeof fileId === 'string' ? fileId.trim() : ''
-        if (!p) return { ok: false, error: 'project_id가 비어 있습니다' }
-        if (!f) return { ok: false, error: 'file_id(FileRef identity)가 비어 있습니다' }
-        const response = await api.linkProjectFile(
-          p,
-          f,
-          typeof relation === 'string' && relation.trim() ? relation.trim() : 'reference',
-        )
-        if (!response || response.status !== 'ok') {
-          return { ok: false, error: response?.error || '링크 생성에 실패했습니다' }
-        }
-        // 성공 — canonical state에서 fresh snapshot으로 UI 갱신 (수동 패치 금지)
-        await fetchSnapshot()
-        return { ok: true, created: response.created, link: response.link }
+        return result
       },
 
       async linkTaskFile({ taskId, fileId, relation }) {
-        const api = window.jarvisDiscovery
-        if (!api?.linkTaskFile) {
-          return { ok: false, error: 'jarvisDiscovery.linkTaskFile API 없음 — Electron을 재시작하세요.' }
+        const result = await linkTaskFileRequest({ taskId, fileId, relation })
+        if (result.ok) {
+          await fetchSnapshot()
         }
-        const tid = typeof taskId === 'string' ? taskId.trim() : ''
-        const fid = typeof fileId === 'string' ? fileId.trim() : ''
-        if (!tid) return { ok: false, error: 'task_id가 비어 있습니다' }
-        if (!fid) return { ok: false, error: 'file_id(FileRef identity)가 비어 있습니다' }
-        const response = await api.linkTaskFile(
-          tid,
-          fid,
-          typeof relation === 'string' && relation.trim() ? relation.trim() : 'reference',
-        )
-        if (!response || response.status !== 'ok') {
-          return { ok: false, error: response?.error || 'Task 리소스 연결에 실패했습니다' }
-        }
-        await fetchSnapshot()
-        return { ok: true, created: response.created, link: response.link }
+        return result
       },
 
-
       async unlinkTaskFile({ linkId }) {
-        const api = window.jarvisDiscovery
-        if (!api?.unlinkTaskFile) {
-          return { ok: false, error: 'jarvisDiscovery.unlinkTaskFile API 없음 — Electron을 재시작하세요.' }
+        const result = await unlinkTaskFileRequest({ linkId })
+        if (result.ok) {
+          await fetchSnapshot()
         }
-        const lid = typeof linkId === 'string' ? linkId.trim() : ''
-        if (!lid) return { ok: false, error: 'link_id가 비어 있습니다' }
-        const response = await api.unlinkTaskFile(lid)
-        if (!response || response.status !== 'ok') {
-          return { ok: false, error: response?.error || 'Task 리소스 연결 해제에 실패했습니다' }
-        }
-        await fetchSnapshot()
-        return { ok: true, removed: response.removed, link: response.link }
+        return result
       },
       async setProjectWorkspace({ projectId, rootId }) {
         const api = window.jarvisDiscovery

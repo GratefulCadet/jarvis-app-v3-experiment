@@ -15,6 +15,8 @@ import useJarvisRuntime, {
 
 import useVoiceOutput from './useVoiceOutput'
 
+import { linkTaskFile } from './jarvisLinkApi'
+
 import './App.css'
 
 const PIP_BREAKPOINT = 500
@@ -500,6 +502,30 @@ function App() {
     }
   }, [])
 
+  /*
+    M2 — Active File → focused Task 연결 (어시스턴트에서의 명시적 사용자 행동).
+    canonical ResourceLink만 생성하고, 복귀 브리핑이 다음부터 그 자료를
+    "그 작업의 관련 파일"로 실어 나른다. AI 자동 연결 없음(V4 §13-C).
+  */
+  const handleLinkFileToFocus = useCallback(async () => {
+    const taskId = executionContext?.node?.id
+    const file = fileEditor
+
+    if (
+      !file?.fileId ||
+      typeof taskId !== 'string' ||
+      !taskId.startsWith('t-')
+    ) {
+      return { ok: false, error: '연결할 작업과 파일이 필요합니다' }
+    }
+
+    return linkTaskFile({
+      taskId,
+      fileId: file.fileId,
+      relation: 'reference',
+    })
+  }, [executionContext, fileEditor])
+
   const openCommandCenter =
     useCallback(async () => {
       if (
@@ -813,6 +839,7 @@ function App() {
           activeFile={fileEditor}
           onCloseActiveFile={() => setFileEditor(null)}
           onStartTask={handleStartTask}
+          onLinkFileToFocus={handleLinkFileToFocus}
           contextOpen={contextOpen}
           onToggleContext={() => setContextOpen((open) => !open)}
         />

@@ -11,7 +11,9 @@ import {
 } from 'animejs'
 
 import {
+  Check,
   FileText,
+  Link2,
   Mic,
   PanelLeft,
   Sparkles,
@@ -55,9 +57,20 @@ function ResumeBriefingPanel({ briefing, onStartTask, onDismiss }) {
   } = briefing
 
   const recent = (lastActivity || [])[0]
-  const fileNames = (resources || [])
+  // M2 — 다음 행동 task에 연결된 파일이 먼저 뜨도록 정렬 (관련 자료 정확도)
+  const nextFiles = (nextAction?.resources || [])
     .map((entry) => entry.file?.name || entry.file?.path)
     .filter(Boolean)
+  const nextFileIds = new Set(
+    (nextAction?.resources || [])
+      .map((entry) => entry.file?.id)
+      .filter(Boolean),
+  )
+  const otherFiles = (resources || [])
+    .filter((entry) => !nextFileIds.has(entry.file?.id))
+    .map((entry) => entry.file?.name || entry.file?.path)
+    .filter(Boolean)
+  const fileNames = [...nextFiles, ...otherFiles]
 
   return (
     <section
@@ -114,6 +127,11 @@ function ResumeBriefingPanel({ briefing, onStartTask, onDismiss }) {
                   {nextAction.reason}
                 </span>
               )}
+              {nextFiles.length > 0 && (
+                <span className="jarvis-resume-clamp jarvis-resume-next-files">
+                  자료: {nextFiles.join(' · ')}
+                </span>
+              )}
             </>
           ) : (
             <span>바로 이어서 할 일이 없습니다.</span>
@@ -147,6 +165,7 @@ export default function CommandCenter({
   activeFile,
   onCloseActiveFile,
   onStartTask,
+  onLinkFileToFocus,
   contextOpen = false,
   onToggleContext,
 }) {
@@ -155,6 +174,46 @@ export default function CommandCenter({
   const filledVoiceSeq = useRef(0)
   const [prompt, setPrompt] = useState('')
   const voice = useVoiceCapture()
+
+  /*
+    M2 — Active File → focused Task 연결.
+    사용자가 버튼을 누를 때만 canonical ResourceLink가 생성된다 — AI 자동
+    연결 없음(V4 §13-C). 상태는 (task, file) 짝 단위로 초기화된다.
+  */
+  const [fileLinkState, setFileLinkState] = useState({
+    key: '',
+    status: 'idle',
+    error: '',
+  })
+
+  const focusNode = executionContext?.node
+  const focusTaskId =
+    typeof focusNode?.id === 'string' &&
+    focusNode.id.startsWith('t-')
+      ? focusNode.id
+      : null
+  const fileLinkKey =
+    focusTaskId && activeFile?.fileId
+      ? `${focusTaskId}|${activeFile.fileId}`
+      : ''
+  const linkStatus =
+    fileLinkState.key === fileLinkKey ? fileLinkState.status : 'idle'
+
+  const handleLinkFile = async () => {
+    if (!fileLinkKey || !onLinkFileToFocus) return
+    if (linkStatus === 'linking' || linkStatus === 'linked') return
+    setFileLinkState({ key: fileLinkKey, status: 'linking', error: '' })
+    const result = await onLinkFileToFocus()
+    if (result?.ok) {
+      setFileLinkState({ key: fileLinkKey, status: 'linked', error: '' })
+    } else {
+      setFileLinkState({
+        key: fileLinkKey,
+        status: 'error',
+        error: result?.error || '연결에 실패했습니다',
+      })
+    }
+  }
 
   useEffect(() => {
     if (
@@ -367,6 +426,46 @@ export default function CommandCenter({
                   <span>개선점 검토</span>
                 </button>
               </div>
+
+              {/*
+                M2 — 이 파일을 현재 초점 작업에 연결 (명시적 사용자 행동만).
+                task가 초점일 때만 나타나고, 연결되면 복귀 브리핑에 그 자료로 실린다.
+              */}
+              {focusTaskId && activeFile?.fileId && onLinkFileToFocus && (
+                <div className="jarvis-focus-link">
+                  <button
+                    type="button"
+                    className={[
+                      'jarvis-link-file-btn',
+                      linkStatus === 'linked' ? 'is-linked' : '',
+                      linkStatus === 'error' ? 'is-error' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={handleLinkFile}
+                    disabled={linkStatus === 'linking' || linkStatus === 'linked'}
+                    title={`이 파일을 "${focusNode?.label || focusTaskId}" 작업에 연결`}
+                  >
+                    {linkStatus === 'linked' ? (
+                      <Check size={11} strokeWidth={2} aria-hidden="true" />
+                    ) : (
+                      <Link2 size={11} strokeWidth={2} aria-hidden="true" />
+                    )}
+                    <span>
+                      {linkStatus === 'linked'
+                        ? '연결됨'
+                        : linkStatus === 'linking'
+                          ? '연결 중…'
+                          : '이 작업에 연결'}
+                    </span>
+                  </button>
+                  {linkStatus === 'error' && (
+                    <span className="jarvis-link-file-error" role="alert">
+                      {fileLinkState.error}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
