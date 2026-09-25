@@ -40,14 +40,30 @@ function _field(payload, ...keys) {
   return undefined
 }
 
+function resolveCanonicalStateDir(app) {
+  if (process.env.JARVIS_STATE_DIR) return process.env.JARVIS_STATE_DIR
+  if (process.env.JARVIS_BRIDGE_MEMORY_DIR) return process.env.JARVIS_BRIDGE_MEMORY_DIR
+  if (app && typeof app.getPath === 'function') {
+    return path.join(app.getPath('userData'), 'memory')
+  }
+  if (process.platform === 'win32') {
+    const appdata = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
+    return path.join(appdata, 'jarvis-app', 'memory')
+  }
+  const xdg = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config')
+  return path.join(xdg, 'jarvis-app', 'memory')
+}
+
 function registerBridgeIpc({ ipcMain, app }) {
   const harnessHome = resolveHarnessHome()
+  const canonicalStateDir = resolveCanonicalStateDir(app)
+  const isScratchForced = ['1', 'true', 'yes'].includes((process.env.JARVIS_USE_SCRATCH || '').toLowerCase())
+
   const manager = new BridgeManager({
     harnessHome,
     env: {
-      // 기본은 격리 scratch — 실 memory는 JARVIS_BRIDGE_MEMORY_DIR로 명시적 opt-in
-      JARVIS_BRIDGE_MEMORY_DIR:
-        process.env.JARVIS_BRIDGE_MEMORY_DIR || '',
+      JARVIS_STATE_DIR: isScratchForced ? '' : canonicalStateDir,
+      JARVIS_USE_SCRATCH: isScratchForced ? '1' : '',
     },
     onStderr: (text) => {
       console.error('[bridge]', text)
@@ -88,7 +104,8 @@ function registerBridgeIpc({ ipcMain, app }) {
     return {
       running: manager.isRunning,
       harnessHome,
-      scratch: !process.env.JARVIS_BRIDGE_MEMORY_DIR,
+      scratch: isScratchForced,
+      stateDir: isScratchForced ? path.join(harnessHome, 'data', 'electron_scratch') : canonicalStateDir,
     }
   })
 
