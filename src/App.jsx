@@ -461,6 +461,45 @@ function App() {
     return window.jarvisWindow
   }
 
+  /*
+    Resume Briefing의 [시작] (M1 — 복귀 → 이어서 시작).
+
+    다음 행동을 기존 실행 문맥(Focus)으로 넘기고, 그 task에 연결된 자료가
+    있으면 Active File로 함께 연다 — Quick Actions를 바로 쓸 수 있는 상태.
+    전부 transient UI 상태일 뿐 canonical 상태를 쓰지 않는다.
+  */
+  const handleStartTask = useCallback((nextAction) => {
+    if (!nextAction || !nextAction.task_id) {
+      return
+    }
+
+    setExecutionContext({
+      node: {
+        id: nextAction.task_id,
+        label: nextAction.title || nextAction.task_id,
+        type: 'task',
+      },
+      path: [],
+    })
+
+    const linked = (nextAction.resources || []).find(
+      (entry) =>
+        entry.file &&
+        entry.file.status === 'ok' &&
+        entry.file.path,
+    )
+
+    if (linked) {
+      setFileEditor({
+        fileId: linked.file.id,
+        rootId: linked.file.root_id,
+        path: linked.file.path,
+        label: linked.file.name || linked.file.path,
+      })
+      setContextOpen(true)
+    }
+  }, [])
+
   const openCommandCenter =
     useCallback(async () => {
       if (
@@ -773,6 +812,7 @@ function App() {
           voiceOutput={voiceOutput}
           activeFile={fileEditor}
           onCloseActiveFile={() => setFileEditor(null)}
+          onStartTask={handleStartTask}
           contextOpen={contextOpen}
           onToggleContext={() => setContextOpen((open) => !open)}
         />

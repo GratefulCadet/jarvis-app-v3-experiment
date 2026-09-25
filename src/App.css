@@ -8078,6 +8078,143 @@
   cursor: not-allowed;
 }
 
+/* Resume Briefing (M1 — 복귀 → 이어서 시작) */
+.jarvis-resume-briefing {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.jarvis-resume-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jarvis-resume-heading strong {
+  font-size: 13px;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-resume-title {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.jarvis-resume-dismiss {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 0;
+}
+
+.jarvis-resume-dismiss:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.jarvis-resume-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.jarvis-resume-row {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.jarvis-resume-row > span:first-child {
+  flex: 0 0 42px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.jarvis-resume-row > span:last-child {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.jarvis-resume-clamp {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-resume-next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.jarvis-resume-next-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.jarvis-resume-next-text strong {
+  font-size: 12px;
+  color: #fff;
+}
+
+.jarvis-resume-next-text span:not(.jarvis-resume-next-label) {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.jarvis-resume-next-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.jarvis-resume-start {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: transparent;
+  color: #fff;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.jarvis-resume-start:hover {
+  background: rgba(255, 255, 255, 0.9);
+  color: #000;
+}
+
+.jarvis-resume-notes {
+  margin-top: 8px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
 .jarvis-active-file-chip span {
   overflow: hidden;
   text-overflow: ellipsis;

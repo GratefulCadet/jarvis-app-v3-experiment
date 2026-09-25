@@ -45,6 +45,7 @@ const RUNTIME_EVENT = Object.freeze({
   REJECT_RESOLVED: 'reject-resolved',
   ERROR: 'error',
   DISMISS: 'dismiss',
+  DISMISS_BRIEFING: 'dismiss-briefing',
 })
 
 const createInitialRuntime = () => ({
@@ -57,6 +58,13 @@ const createInitialRuntime = () => ({
   tracePath: null,
   scratch: true,
   timeline: [],
+  /*
+    Resume Briefing (M1 — 복귀 → 이어서 시작).
+    bridge events의 resume_briefing tool data를 그대로 보관한다 — 파생·일시적
+    표시 상태이며 영속 엔티티가 아니다(V4 §6). 새 브리핑이 오거나 사용자가
+    닫을 때까지 유지된다.
+  */
+  resumeBriefing: null,
 })
 
 const pushTimeline = (state, entry) => ({
@@ -127,6 +135,8 @@ const runtimeReducer = (state, event) => {
           traceId: event.traceId || null,
           tracePath: event.tracePath || null,
           scratch: Boolean(event.scratch),
+          resumeBriefing:
+            extractResumeBriefing(event.events) || state.resumeBriefing,
         },
         { kind: 'permission', label: 'PERMISSION REQUIRED', detail: permissionDetail(event.toolCall) },
       )
@@ -140,6 +150,8 @@ const runtimeReducer = (state, event) => {
         traceId: event.traceId || null,
         tracePath: event.tracePath || null,
         scratch: Boolean(event.scratch),
+        resumeBriefing:
+          extractResumeBriefing(event.events) || state.resumeBriefing,
       }
       const toolEntries = eventsToTimeline(event.events)
       let next = base
@@ -164,6 +176,8 @@ const runtimeReducer = (state, event) => {
         traceId: event.traceId || null,
         tracePath: event.tracePath || null,
         scratch: Boolean(event.scratch),
+        resumeBriefing:
+          extractResumeBriefing(event.events) || state.resumeBriefing,
       }
       const approved = pushTimeline(
         base,
@@ -204,9 +218,36 @@ const runtimeReducer = (state, event) => {
         toolCall: null,
       }
 
+    case RUNTIME_EVENT.DISMISS_BRIEFING:
+      return {
+        ...state,
+        resumeBriefing: null,
+      }
+
     default:
       return state
   }
+}
+
+/*
+  events에서 resume_briefing read tool의 data를 추출한다.
+  브리지는 trace tool_results의 data를 그대로 실어 나르므로 별도 채널이
+  필요 없다 — 결정적 조립 결과가 왜곡 없이 UI에 도착한다.
+*/
+const extractResumeBriefing = (events = []) => {
+  let briefing = null
+  for (const event of events) {
+    if (
+      event.kind === 'tool' &&
+      event.name === 'resume_briefing' &&
+      event.ok &&
+      event.data &&
+      event.data.status === 'ok'
+    ) {
+      briefing = event.data
+    }
+  }
+  return briefing
 }
 
 const permissionDetail = (toolCall) => {
@@ -262,6 +303,7 @@ export default function useJarvisRuntime() {
       dispatch({
         type: RUNTIME_EVENT.PERMISSION_REQUIRED,
         toolCall: response.tool_call,
+        events: response.events,
         traceId: response.trace_id,
         tracePath: response.trace_path,
         scratch: response.scratch,
@@ -308,6 +350,7 @@ export default function useJarvisRuntime() {
       dispatch({
         type: RUNTIME_EVENT.PERMISSION_REQUIRED,
         toolCall: response.tool_call,
+        events: response.events,
         traceId: response.trace_id,
         tracePath: response.trace_path,
         scratch: response.scratch,
@@ -357,6 +400,10 @@ export default function useJarvisRuntime() {
     dispatch({ type: RUNTIME_EVENT.DISMISS })
   }, [])
 
+  const dismissBriefing = useCallback(() => {
+    dispatch({ type: RUNTIME_EVENT.DISMISS_BRIEFING })
+  }, [])
+
   // web(브라우저) 실행 시 경고 — Electron 없이도 dev:web에서 상태 확인 가능
   useEffect(() => {
     if (!window.jarvisRuntime) {
@@ -374,9 +421,11 @@ export default function useJarvisRuntime() {
     tracePath: state.tracePath,
     scratch: state.scratch,
     timeline: state.timeline,
+    resumeBriefing: state.resumeBriefing,
     submit,
     approve,
     reject,
     dismiss,
+    dismissBriefing,
   }
 }

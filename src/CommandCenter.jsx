@@ -33,12 +33,120 @@ const ASSISTANT_MOTION = {
   orbitGuideDurationMs: 760,
 }
 
+/*
+  Resume Briefing (M1 — 복귀 → 이어서 시작).
+
+  resume_briefing read tool의 결정적 조립 결과를 그대로 그린다 — 프로젝트,
+  task 현황, 관련 파일, 마지막 활동, 다음 행동 제안. [시작]은 다음 행동을
+  기존 실행 문맥(Focus)으로 넘길 뿐이고, 어떤 상태도 여기서 변경하지 않는다.
+*/
+function ResumeBriefingPanel({ briefing, onStartTask, onDismiss }) {
+  if (!briefing || briefing.status !== 'ok') {
+    return null
+  }
+
+  const {
+    project,
+    tasks,
+    resources,
+    last_activity: lastActivity,
+    next_action: nextAction,
+    notes,
+  } = briefing
+
+  const recent = (lastActivity || [])[0]
+  const fileNames = (resources || [])
+    .map((entry) => entry.file?.name || entry.file?.path)
+    .filter(Boolean)
+
+  return (
+    <section
+      className="jarvis-resume-briefing"
+      aria-label="Resume briefing"
+    >
+      <div className="jarvis-resume-heading">
+        <span className="jarvis-resume-title">RESUME</span>
+        <strong>{project?.title || project?.id}</strong>
+        {onDismiss && (
+          <button
+            type="button"
+            className="jarvis-resume-dismiss"
+            onClick={onDismiss}
+            title="Close resume briefing"
+            aria-label="Close resume briefing"
+          >
+            <X size={11} strokeWidth={2} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+
+      <div className="jarvis-resume-rows">
+        <div className="jarvis-resume-row">
+          <span>Tasks</span>
+          <span>
+            {tasks?.open_count ?? 0} open · {tasks?.completed_count ?? 0} done
+          </span>
+        </div>
+        {recent?.summary && (
+          <div className="jarvis-resume-row">
+            <span>Last</span>
+            <span className="jarvis-resume-clamp">{recent.summary}</span>
+          </div>
+        )}
+        {fileNames.length > 0 && (
+          <div className="jarvis-resume-row">
+            <span>Files</span>
+            <span className="jarvis-resume-clamp">
+              {fileNames.slice(0, 3).join(' · ')}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="jarvis-resume-next">
+        <div className="jarvis-resume-next-text">
+          <span className="jarvis-resume-next-label">NEXT</span>
+          {nextAction ? (
+            <>
+              <strong>{nextAction.title}</strong>
+              {nextAction.reason && (
+                <span className="jarvis-resume-clamp">
+                  {nextAction.reason}
+                </span>
+              )}
+            </>
+          ) : (
+            <span>바로 이어서 할 일이 없습니다.</span>
+          )}
+        </div>
+        {nextAction && onStartTask && (
+          <button
+            type="button"
+            className="jarvis-resume-start"
+            onClick={() => onStartTask(nextAction)}
+            title="이 작업을 현재 초점으로 시작"
+          >
+            시작
+          </button>
+        )}
+      </div>
+
+      {(notes || []).length > 0 && (
+        <div className="jarvis-resume-notes">
+          {notes.join(' · ')}
+        </div>
+      )}
+    </section>
+  )
+}
+
 export default function CommandCenter({
   executionContext,
   runtime,
   voiceOutput,
   activeFile,
   onCloseActiveFile,
+  onStartTask,
   contextOpen = false,
   onToggleContext,
 }) {
@@ -414,6 +522,12 @@ export default function CommandCenter({
               {runtime.text || '할 일을 물어보거나, 새 task를 추가해보세요.'}
             </div>
           </JarvisRuntimePanel>
+
+          <ResumeBriefingPanel
+            briefing={runtime.resumeBriefing}
+            onStartTask={onStartTask}
+            onDismiss={runtime.dismissBriefing}
+          />
 
           <ActivityTimeline
             timeline={runtime.timeline}
