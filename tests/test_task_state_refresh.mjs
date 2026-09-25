@@ -35,7 +35,9 @@ const extractHelper = () => {
 
   const snippet = source
     .slice(start, end)
-    .replace('export const eventsMutatedTasks', 'const eventsMutatedTasks')
+    // 이 구간의 순수 판정 함수들이 export 된다 — new Function 안에서는
+    // export 문법이 없으므로 전부 벗겨 낸다(함수 추가 시 함께 갱신).
+    .replace(/export const /g, 'const ')
   return new Function(`${snippet}; return eventsMutatedTasks;`)()
 }
 

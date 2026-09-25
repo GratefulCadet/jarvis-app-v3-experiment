@@ -30,6 +30,79 @@ const actionLabel = (toolName) => {
   return labels[toolName] || 'Requested action'
 }
 
+/*
+  Milestone B — "생성 직후 관련 자료까지 이어지는 복귀".
+
+  모델이 방금 만든 task와, 그 요청에 함께 실렸던 Active File이 있을 때만
+  연결 제안을 보인다. 세 요소가 모두 있을 때만 affordance가 존재한다:
+    1) 실제로 생성된 task (id는 events에서만 얻을 수 있다)
+    2) 요청 당시 보고 있던 파일
+    3) 그 파일의 stable FileRef identity (경로만으로는 링크 불가)
+  하나라도 없으면 아무것도 뜨지 않는다 — 추측 제안 금지.
+
+  링크는 사용자가 [연결]을 누를 때에만 만들어진다. 자동 연결 없음(V4 §13-C).
+  [나중에]는 상태만 버린다(영속 변화 없음).
+*/
+function LinkAffordance({ runtime, compact = false }) {
+  const affordance = runtime.linkAffordance
+  const linkState = runtime.linkState || { status: 'idle' }
+
+  if (!affordance && linkState.status !== 'done') {
+    return null
+  }
+
+  if (linkState.status === 'done') {
+    return (
+      <div className="jarvis-link-affordance is-done" role="status">
+        <span className="jarvis-link-affordance-text">
+          {linkState.fileName
+            ? `${linkState.fileName}을(를) ${linkState.taskTitle || '새 작업'}에 연결했습니다.`
+            : '작업에 자료를 연결했습니다.'}
+        </span>
+        <button
+          type="button"
+          className="jarvis-link-skip"
+          onClick={runtime.dismissLinkAffordance}
+        >
+          Dismiss
+        </button>
+      </div>
+    )
+  }
+
+  const busy = linkState.status === 'busy'
+
+  return (
+    <div className="jarvis-link-affordance" role="group" aria-label="Link active file">
+      <div className="jarvis-link-affordance-text">
+        {linkState.status === 'error'
+          ? `연결하지 못했습니다: ${linkState.error || '알 수 없는 오류'}`
+          : compact
+            ? `${affordance.fileName} → ${affordance.taskTitle}`
+            : `지금 보고 있는 파일(${affordance.fileName})을 새로 만든 작업(${affordance.taskTitle})에 연결할까요?`}
+      </div>
+      <div className="jarvis-link-affordance-actions">
+        <button
+          type="button"
+          className="jarvis-link-button"
+          onClick={runtime.linkActiveFile}
+          disabled={busy}
+        >
+          {busy ? 'Linking…' : 'Link file'}
+        </button>
+        <button
+          type="button"
+          className="jarvis-link-skip"
+          onClick={runtime.dismissLinkAffordance}
+          disabled={busy}
+        >
+          Not now
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function JarvisRuntimePanel({
   runtime,
   onApprove,
@@ -167,6 +240,8 @@ export default function JarvisRuntimePanel({
           <div className="jarvis-runtime-quiet-note">
             응답 완료 — 자세한 답변은 Command Center에서 확인하세요.
           </div>
+
+          <LinkAffordance runtime={runtime} compact />
         </div>
       )
     }
@@ -187,6 +262,8 @@ export default function JarvisRuntimePanel({
         <div className="jarvis-runtime-text">
           {text || '완료했습니다.'}
         </div>
+
+        <LinkAffordance runtime={runtime} />
 
         {tracePath && (
           <div className="jarvis-runtime-trace">

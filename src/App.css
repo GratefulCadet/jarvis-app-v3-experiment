@@ -8391,6 +8391,117 @@
   padding: 4px 6px;
 }
 
+.jarvis-mini-dismiss:hover {
+  color: var(--jarvis-text);
+}
+
+.jarvis-mini-dismiss:focus-visible {
+  outline: 1px solid var(--jarvis-focus-ring);
+  outline-offset: 2px;
+}
+
+/*
+  Milestone B — "지금 보고 있는 파일을 방금 만든 작업에 연결" 제안.
+
+  자동 연결이 아니다: 버튼이 명시적으로 눌릴 때만 canonical ResourceLink가
+  만들어진다. 상태 표현(hover / focus-visible / disabled / done)은 Main
+  토큰과 같은 원천을 쓴다 — 같은 의미의 요소가 두 화면에서 다른 값을 갖지
+  않도록.
+*/
+.jarvis-link-affordance {
+  display: grid;
+  gap: 6px;
+  padding: 8px 9px;
+  border: 1px solid var(--jarvis-border-soft);
+  border-radius: 10px;
+  background: var(--jarvis-surface-quiet);
+}
+
+.jarvis-link-affordance.is-done {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-color: var(--jarvis-border-strong);
+  background: var(--jarvis-surface-active);
+}
+
+.jarvis-link-affordance-text {
+  color: var(--jarvis-text-soft);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.jarvis-link-affordance-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.jarvis-link-button,
+.jarvis-link-skip {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  padding: 4px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.jarvis-link-button {
+  border: 1px solid var(--jarvis-border-strong);
+  background: var(--jarvis-accent-soft);
+  color: var(--jarvis-text);
+}
+
+.jarvis-link-button:hover:not(:disabled) {
+  background: var(--jarvis-hover);
+  border-color: var(--jarvis-border-active);
+}
+
+.jarvis-link-button:focus-visible,
+.jarvis-link-skip:focus-visible {
+  outline: 1px solid var(--jarvis-focus-ring);
+  outline-offset: 2px;
+}
+
+.jarvis-link-skip {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--jarvis-text-muted);
+}
+
+.jarvis-link-skip:hover:not(:disabled) {
+  color: var(--jarvis-text-soft);
+  background: var(--jarvis-control);
+}
+
+.jarvis-link-button:disabled,
+.jarvis-link-skip:disabled {
+  color: var(--jarvis-disabled);
+  border-color: var(--jarvis-border);
+  background: transparent;
+  cursor: default;
+}
+
+/* PiP는 좁다 — compact 밀도 유지, 색 체계만 Main과 동일. */
+.pip-presence > .jarvis-runtime-panel .jarvis-link-affordance {
+  padding: 6px 7px;
+  gap: 4px;
+}
+
+.pip-presence > .jarvis-runtime-panel .jarvis-link-affordance-text {
+  font-size: 10px;
+}
+
+.pip-presence > .jarvis-runtime-panel .jarvis-link-button,
+.pip-presence > .jarvis-runtime-panel .jarvis-link-skip {
+  font-size: 9px;
+  padding: 3px 7px;
+}
+
 .jarvis-command-form {
   display: flex;
   gap: 8px;

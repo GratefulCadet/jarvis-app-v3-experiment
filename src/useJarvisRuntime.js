@@ -4,6 +4,7 @@ import {
   useReducer,
   useRef,
 } from 'react'
+import { linkTaskFile } from './jarvisLinkApi'
 
 /*
   JARVIS runtime 상태 머신 (Task 2).
@@ -46,6 +47,9 @@ const RUNTIME_EVENT = Object.freeze({
   ERROR: 'error',
   DISMISS: 'dismiss',
   DISMISS_BRIEFING: 'dismiss-briefing',
+  LINK_ACTIVE_FILE: 'link-active-file',
+  LINK_ACTIVE_FILE_RESOLVED: 'link-active-file-resolved',
+  DISMISS_LINK: 'dismiss-link',
 })
 
 const createInitialRuntime = () => ({
@@ -75,6 +79,28 @@ const createInitialRuntime = () => ({
     effect가 다시 돌지 않기 때문이다.
   */
   taskStateRevision: 0,
+  /*
+    Milestone B — "생성 직후 관련 자료까지 이어지는 복귀".
+
+    모델이 방금 만든 task(생성된 id는 events 안에만 있다)와, 그 요청에
+    함께 실렸던 Active File(identity locator)만 기억한다. 둘 다 파생·일시적
+    표시 신호이며 영속 엔티티가 아니다(V4 §6) — canonical ResourceLink는
+    사용자가 명시적으로 승인한 뒤에만 생성된다.
+
+    왜 둘이 따로 필요했나: M2의 "Active File → focused Task" 링크는 트리에서
+    사용자가 task 노드를 직접 선택해야 나타난다. 모델이 만든 새 task는 선택된
+    상태가 아니므로 그 순간 아무 연결 단서도 뜨지 않았다. 이 상태는 그 순간
+    필요한 정보 두 개(무엇이 생겼는지, 무엇을 보고 있었는지)만 실어 둔다.
+  */
+  submittedActiveFile: null,
+  createdTask: null,
+  linkState: {
+    status: 'idle',
+    error: null,
+    taskId: null,
+    taskTitle: null,
+    fileName: null,
+  },
 })
 
 const pushTimeline = (state, entry) => ({
@@ -107,6 +133,55 @@ export const eventsMutatedTasks = (events = []) => {
     return true
   }
   return false
+}
+
+/*
+  응답 events에서 "이번 턴에 실제로 만들어진 task"를 꺼낸다.
+
+  task_id는 create_task 인자에 없다 — 모델은 생성된 id를 모르고 TaskStore가
+  발급한다. 그래서 id는 실행 결과 data에만 존재한다(requires_confirmation이
+  아니고 ok여야 실제로 만들어진 것이다). project_id는 인자에 있으므로 둘을
+  함께 읽으면 검증에 쓰인 프로젝트까지 알 수 있다.
+*/
+export const createdTaskFromEvents = (events = []) => {
+  for (const event of events) {
+    if (!event || event.kind !== 'tool') continue
+    if (event.name !== 'create_task') continue
+    if (event.requires_confirmation) continue
+    if (event.ok !== true) continue
+    const data = event.data || {}
+    if (!data.id) continue
+    return {
+      id: data.id,
+      title: data.title || '',
+      projectId: data.project_id || (event.arguments || {}).project_id || '',
+    }
+  }
+  return null
+}
+
+/*
+  링크 affordance를 만들 수 있는지 판단한다.
+
+  조건은 둘뿐이다 — (1) 방금 생성된 task가 있고 (2) 그 요청에 실렸던 Active
+  File에 stable FileRef identity(file_id)가 있다. 하나라도 없으면 아무것도
+  제안하지 않는다. 경로만 있고 identity가 없는 파일은 bridge도 링크를
+  거부하므로 애초에 후보가 아니다. 자동 연결은 없다 — 이 함수는 "보여줄
+  근거가 있는가"만 판정하고, 링크 생성은 사용자의 명시적 클릭에서만 일어난다.
+*/
+export const selectLinkAffordance = (state) => {
+  const created = state && state.createdTask
+  const active = state && state.submittedActiveFile
+  if (!created || !created.id) return null
+  if (!active || !active.fileId) return null
+  const linkState = (state && state.linkState) || { status: 'idle' }
+  if (linkState.status === 'done') return null
+  return {
+    taskId: created.id,
+    taskTitle: created.title,
+    fileId: active.fileId,
+    fileName: active.name || active.path || '',
+  }
 }
 
 /*
@@ -155,6 +230,23 @@ const runtimeReducer = (state, event) => {
         toolCall: null,
         traceId: null,
         tracePath: null,
+        // 새 요청이 시작되면 이전 턴의 링크 후보는 무효다.
+        submittedActiveFile: (event.activeFile && event.activeFile.fileId)
+          ? {
+              fileId: event.activeFile.fileId,
+              rootId: event.activeFile.rootId || '',
+              path: event.activeFile.path || '',
+              name: event.activeFile.label || event.activeFile.name || '',
+            }
+          : null,
+        createdTask: null,
+        linkState: {
+          status: 'idle',
+          error: null,
+          taskId: null,
+          taskTitle: null,
+          fileName: null,
+        },
       }
       if (event.text) {
         const sourceLabel = event.source === 'voice' ? 'VOICE' : 'USER'
@@ -192,6 +284,8 @@ const runtimeReducer = (state, event) => {
         taskStateRevision: eventsMutatedTasks(event.events)
           ? state.taskStateRevision + 1
           : state.taskStateRevision,
+        // Milestone B — 실제로 생성된 task가 있으면 id를 기억한다(파생 신호).
+        createdTask: createdTaskFromEvents(event.events),
       }
       const toolEntries = eventsToTimeline(event.events)
       let next = base
@@ -222,6 +316,8 @@ const runtimeReducer = (state, event) => {
         taskStateRevision: eventsMutatedTasks(event.events)
           ? state.taskStateRevision + 1
           : state.taskStateRevision,
+        // Milestone B — 승인이 실제 생성으로 이어졌을 때의 생성된 task id.
+        createdTask: createdTaskFromEvents(event.events),
       }
       const approved = pushTimeline(
         base,
@@ -260,6 +356,62 @@ const runtimeReducer = (state, event) => {
         text: '',
         error: null,
         toolCall: null,
+        createdTask: null,
+        linkState: {
+          status: 'idle',
+          error: null,
+          taskId: null,
+          taskTitle: null,
+          fileName: null,
+        },
+      }
+
+    case RUNTIME_EVENT.LINK_ACTIVE_FILE:
+      return {
+        ...state,
+        linkState: {
+          ...state.linkState,
+          status: 'busy',
+          error: null,
+        },
+      }
+
+    case RUNTIME_EVENT.LINK_ACTIVE_FILE_RESOLVED:
+      if (!event.ok) {
+        return {
+          ...state,
+          linkState: {
+            ...state.linkState,
+            status: 'error',
+            error: event.error || '링크에 실패했습니다',
+          },
+        }
+      }
+      return {
+        ...state,
+        // 링크가 canonical state에 생겼으므로 트리는 다시 읽어야 한다.
+        // 같은 단조 카운터를 재사용해 새로고침 경로를 하나만 둔다.
+        taskStateRevision: state.taskStateRevision + 1,
+        linkState: {
+          status: 'done',
+          error: null,
+          taskId: event.taskId,
+          taskTitle: event.taskTitle,
+          fileName: event.fileName,
+        },
+      }
+
+    case RUNTIME_EVENT.DISMISS_LINK:
+      return {
+        ...state,
+        createdTask: null,
+        linkState: {
+          status: 'idle',
+          error: null,
+          taskId: null,
+          taskTitle: null,
+          fileName: null,
+        },
       }
 
     case RUNTIME_EVENT.DISMISS_BRIEFING:
@@ -331,6 +483,8 @@ export default function useJarvisRuntime() {
       type: RUNTIME_EVENT.SUBMIT,
       text: trimmed,
       source: options && options.source === 'voice' ? 'voice' : 'text',
+      // Milestone B — 이 요청과 함께 보고 있던 파일을 기억해 둔다.
+      activeFile: (options && options.activeFile) || null,
     })
     /*
       Active File — 열려 있는 파일의 identity locator만 전송한다(내용 없음).
@@ -448,6 +602,43 @@ export default function useJarvisRuntime() {
     dispatch({ type: RUNTIME_EVENT.DISMISS_BRIEFING })
   }, [])
 
+  /*
+    Milestone B — 사용자의 명시적 클릭에서만 canonical ResourceLink를 만든다.
+
+    jarvisLinkApi.linkTaskFile은 트리 팝오버와 App의 M2 링크가 이미 쓰는
+    유일한 정규화 경로다(동일한 검증·동일한 resource_links.json 단일 writer).
+    새 write path를 만들지 않고 그 경로를 재사용한다. 자동 실행은 없다 —
+    이 콜백은 버튼 onClick에서만 불린다.
+  */
+  const linkActiveFile = useCallback(async () => {
+    const current = stateRef.current
+    const affordance = selectLinkAffordance(current)
+    if (!affordance) return { ok: false, error: '연결할 작업/파일이 없습니다' }
+    if (current.linkState.status === 'busy') {
+      return { ok: false, error: '이미 연결하는 중입니다' }
+    }
+
+    dispatch({ type: RUNTIME_EVENT.LINK_ACTIVE_FILE })
+    const result = await linkTaskFile({
+      taskId: affordance.taskId,
+      fileId: affordance.fileId,
+      relation: 'reference',
+    })
+    dispatch({
+      type: RUNTIME_EVENT.LINK_ACTIVE_FILE_RESOLVED,
+      ok: Boolean(result && result.ok),
+      error: result && result.error,
+      taskId: affordance.taskId,
+      taskTitle: affordance.taskTitle,
+      fileName: affordance.fileName,
+    })
+    return result
+  }, [])
+
+  const dismissLinkAffordance = useCallback(() => {
+    dispatch({ type: RUNTIME_EVENT.DISMISS_LINK })
+  }, [])
+
   // web(브라우저) 실행 시 경고 — Electron 없이도 dev:web에서 상태 확인 가능
   useEffect(() => {
     if (!window.jarvisRuntime) {
@@ -466,10 +657,16 @@ export default function useJarvisRuntime() {
     scratch: state.scratch,
     timeline: state.timeline,
     resumeBriefing: state.resumeBriefing,
+    taskStateRevision: state.taskStateRevision,
+    // Milestone B — 파생 표시 신호(영속 엔티티 아님).
+    linkAffordance: selectLinkAffordance(state),
+    linkState: state.linkState,
     submit,
     approve,
     reject,
     dismiss,
     dismissBriefing,
+    linkActiveFile,
+    dismissLinkAffordance,
   }
 }
