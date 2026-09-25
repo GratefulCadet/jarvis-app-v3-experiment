@@ -30,6 +30,45 @@
   --jarvis-legacy-border: rgba(141, 220, 255, 0.13);
   --jarvis-legacy-border-strong: rgba(141, 220, 255, 0.35);
   --jarvis-legacy-text: rgba(232, 249, 255, 0.94);
+
+  /*
+    SHARED SURFACE TOKENS (PiP ↔ Main 색 체계의 단일 원천).
+
+    Main(Command Center)이 기준이다. PiP는 같은 토큰을 소비해 같은 제품
+    테마처럼 보이게 한다. 이전에는 Main 토큰이 .command-center-interface
+    스코프 안에 갇혀 있어 PiP가 참조할 수 없고, PiP presence가 예전 cyan
+    팔레트를 리터럴로 갖고 있어 두 화면이 다른 제품처럼 보였다.
+
+    값은 Main이 이미 쓰던 값과 동일하다 — Main의 모양은 바뀌지 않고,
+    이제 PiP도 같은 원천에서 같은 값을 읽는다.
+  */
+  --jarvis-surface: rgba(8, 8, 8, 0.68);
+  --jarvis-surface-raised: rgba(12, 12, 12, 0.90);
+  --jarvis-surface-quiet: rgba(255, 255, 255, 0.045);
+  --jarvis-surface-active: rgba(255, 255, 255, 0.06);
+
+  --jarvis-control: rgba(255, 255, 255, 0.045);
+
+  --jarvis-border: rgba(255, 255, 255, 0.11);
+  --jarvis-border-soft: rgba(255, 255, 255, 0.16);
+  --jarvis-border-strong: rgba(255, 255, 255, 0.32);
+  --jarvis-border-active: rgba(255, 255, 255, 0.58);
+
+  --jarvis-text: rgba(255, 255, 255, 0.96);
+  --jarvis-text-strong: rgba(255, 255, 255, 0.9);
+  --jarvis-text-soft: rgba(255, 255, 255, 0.67);
+  --jarvis-text-muted: rgba(255, 255, 255, 0.38);
+
+  --jarvis-accent: rgb(255, 255, 255);
+  --jarvis-accent-soft: rgba(255, 255, 255, 0.075);
+
+  --jarvis-hover: rgba(255, 255, 255, 0.12);
+  --jarvis-selected: rgba(255, 255, 255, 0.18);
+  --jarvis-disabled: rgba(255, 255, 255, 0.22);
+  --jarvis-focus-ring: rgba(255, 255, 255, 0.78);
+
+  --jarvis-danger: rgba(255, 120, 120, 0.7);
+  --jarvis-danger-text: #ffb3b3;
 }
 
 /* ==================================================
@@ -2261,32 +2300,32 @@
   pointer-events: none;
 
   --command-surface:
-    rgba(8, 8, 8, 0.68);
+    var(--jarvis-surface);
   --command-surface-strong:
-    rgba(12, 12, 12, 0.90);
+    var(--jarvis-surface-raised);
   --command-surface-hover:
-    rgba(20, 20, 20, 0.88);
+    var(--jarvis-hover);
 
   --command-border:
-    rgba(255, 255, 255, 0.11);
+    var(--jarvis-border);
   --command-border-strong:
-    rgba(255, 255, 255, 0.32);
+    var(--jarvis-border-strong);
   --command-border-active:
-    rgba(255, 255, 255, 0.58);
+    var(--jarvis-border-active);
 
   --command-text:
-    rgba(255, 255, 255, 0.96);
+    var(--jarvis-text);
   --command-text-soft:
-    rgba(255, 255, 255, 0.67);
+    var(--jarvis-text-soft);
   --command-text-muted:
-    rgba(255, 255, 255, 0.38);
+    var(--jarvis-text-muted);
 
   --command-accent:
-    rgb(255, 255, 255);
+    var(--jarvis-accent);
   --command-accent-soft:
-    rgba(255, 255, 255, 0.075);
+    var(--jarvis-accent-soft);
   --command-control:
-    rgba(255, 255, 255, 0.045);
+    var(--jarvis-control);
 
   --command-radius:
     18px;
@@ -7962,28 +8001,28 @@
    ============================================================ */
 
 .jarvis-runtime-panel {
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--jarvis-border-soft);
+  background: var(--jarvis-surface-quiet);
   border-radius: 12px;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  color: #fff;
+  color: var(--jarvis-text);
 }
 
 .jarvis-runtime-panel.is-activity {
-  border-color: rgba(255, 255, 255, 0.28);
+  border-color: var(--jarvis-border-strong);
 }
 
 .jarvis-runtime-panel.is-permission {
-  border-color: rgba(255, 255, 255, 0.6);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--jarvis-border-active);
+  background: var(--jarvis-surface-active);
 }
 
 .jarvis-runtime-panel.is-error {
-  border-color: rgba(255, 120, 120, 0.7);
-  color: #ffb3b3;
+  border-color: var(--jarvis-danger);
+  color: var(--jarvis-danger-text);
 }
 
 .jarvis-runtime-heading {
@@ -7993,7 +8032,7 @@
   font-size: 13px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--jarvis-text-soft);
 }
 
 .jarvis-runtime-dot {
@@ -8353,25 +8392,25 @@
 .jarvis-runtime-text {
   font-size: 15px;
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--jarvis-text-strong);
   white-space: pre-wrap;
 }
 
 /* PiP의 조용한 완료 알림 (Qwen 답변 전문은 Command Center에서만) */
 .jarvis-runtime-panel.is-quiet {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.045);
+  border-color: var(--jarvis-border-strong);
+  background: var(--jarvis-surface-quiet);
 }
 
 .jarvis-runtime-quiet-note {
   font-size: 12px;
   line-height: 1.4;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--jarvis-text-soft);
 }
 
 .jarvis-runtime-trace {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--jarvis-text-muted);
   overflow-wrap: anywhere;
 }
 
@@ -8383,7 +8422,7 @@
 .jarvis-mini-dismiss {
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--jarvis-text-soft);
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -9383,15 +9422,26 @@
   width: 78px;
   height: 78px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(244, 253, 255, 1), rgba(126, 219, 255, 0.86) 28%, rgba(34, 142, 194, 0.42) 64%, transparent 100%);
-  box-shadow: 0 0 42px rgba(126, 219, 255, 0.58), 0 0 78px rgba(67, 174, 221, 0.22);
+  /*
+    예전엔 예전 cyan 팔레트 리터럴을 그대로 썼다. 이제 Main과 같은 단색
+    (monochrome) 액센트 토큰으로 읽는다 — 그라데이션 형태와 레이아웃은
+    그대로 두어 PiP 고유 표현은 유지한다.
+  */
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(255, 255, 255, 0.34) 30%,
+    rgba(255, 255, 255, 0.10) 66%,
+    transparent 100%
+  );
+  box-shadow: 0 0 42px rgba(255, 255, 255, 0.20), 0 0 78px rgba(255, 255, 255, 0.08);
   animation: pip-presence-breathe 4s ease-in-out infinite;
 }
 
 .pip-presence-orb-ring {
   position: absolute;
   inset: 18px;
-  border: 1px solid rgba(126, 219, 255, 0.36);
+  border: 1px solid var(--jarvis-border-strong);
   border-radius: 50%;
   pointer-events: none;
   animation: pip-presence-orbit 12s linear infinite;
@@ -9416,7 +9466,7 @@
 }
 
 .pip-presence-orb-trigger:focus-visible {
-  outline: 1px solid rgba(255, 255, 255, 0.78);
+  outline: 1px solid var(--jarvis-focus-ring);
   outline-offset: 5px;
 }
 
@@ -9429,6 +9479,17 @@
 .pip-presence-orb.is-error .pip-presence-orb-core {
   background: radial-gradient(circle, rgba(255, 240, 240, 1), rgba(255, 130, 130, 0.84) 30%, rgba(161, 48, 48, 0.42) 66%, transparent 100%);
   box-shadow: 0 0 42px rgba(255, 116, 116, 0.48);
+}
+
+.pip-presence-orb.is-done .pip-presence-orb-core {
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(255, 255, 255, 0.40) 32%,
+    rgba(255, 255, 255, 0.12) 68%,
+    transparent 100%
+  );
+  box-shadow: 0 0 46px rgba(255, 255, 255, 0.26);
 }
 
 @keyframes pip-presence-breathe {
@@ -9448,21 +9509,21 @@
   gap: 3px;
   width: 190px;
   transform: translate(-50%, 58px);
-  color: rgba(255, 255, 255, 0.76);
+  color: var(--jarvis-text-soft);
   text-align: center;
   pointer-events: none;
   user-select: none;
 }
 
 .pip-presence-name {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--jarvis-text-strong);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.28em;
 }
 
 .pip-presence-status {
-  color: rgba(255, 255, 255, 0.58);
+  color: var(--jarvis-text-soft);
   font-size: 10px;
 }
 
@@ -9473,14 +9534,14 @@
   max-width: 190px;
   margin-top: 3px;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--jarvis-text-soft);
   font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .pip-presence-focus-label {
-  color: rgba(126, 219, 255, 0.76);
+  color: var(--jarvis-accent);
   font-size: 8px;
   letter-spacing: 0.12em;
 }
@@ -9490,18 +9551,35 @@
   position: absolute;
   top: calc(50% + 82px);
   padding: 4px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid var(--jarvis-border-strong);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.28);
-  color: rgba(255, 255, 255, 0.78);
+  background: var(--jarvis-surface);
+  color: var(--jarvis-text-soft);
   font-size: 9px;
   cursor: pointer;
   pointer-events: auto;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.pip-presence-open:hover,
+.pip-presence-attention:hover {
+  background: var(--jarvis-hover);
+  border-color: var(--jarvis-border-active);
+  color: var(--jarvis-text);
+}
+
+.pip-presence-open:focus-visible,
+.pip-presence-attention:focus-visible {
+  outline: 1px solid var(--jarvis-focus-ring);
+  outline-offset: 3px;
 }
 
 .pip-presence-attention {
-  border-color: rgba(255, 160, 160, 0.46);
-  color: rgba(255, 224, 224, 0.86);
+  border-color: var(--jarvis-danger);
+  color: var(--jarvis-danger-text);
 }
 
 .pip-presence > .jarvis-runtime-panel {
