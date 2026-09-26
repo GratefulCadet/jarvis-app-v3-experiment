@@ -21,6 +21,9 @@ dist-ssr
 electron/voice-worker/assets/
 __pycache__/
 
+# GUI e2e test screenshots (evidence artifacts, regenerated per run)
+tests/artifacts/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

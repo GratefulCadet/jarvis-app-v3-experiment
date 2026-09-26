@@ -225,8 +225,11 @@ function createWindow() {
       ),
     )
   } else {
+    // JARVIS_DEV_URL — 개발 서버 주소 재정의. GUI 자동화(테스트)가 5173을
+    // 점유하지 않고 자기 포트에서 앱을 띄울 수 있게 한다. 사용자가 띄워둔
+    // dev 서버를 건드리지 않기 위한 것이 목적이며, 기본값은 그대로 5173.
     mainWindow.loadURL(
-      'http://localhost:5173',
+      process.env.JARVIS_DEV_URL || 'http://localhost:5173',
     )
   }
 
