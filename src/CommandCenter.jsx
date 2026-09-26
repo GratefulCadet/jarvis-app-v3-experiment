@@ -15,6 +15,7 @@ import {
   FileText,
   Link2,
   Mic,
+  Minimize2,
   PanelLeft,
   Sparkles,
   Volume2,
@@ -168,6 +169,7 @@ export default function CommandCenter({
   onLinkFileToFocus,
   contextOpen = false,
   onToggleContext,
+  onReturnToPip,
 }) {
   const rootRef = useRef(null)
   const promptInputRef = useRef(null)
@@ -356,6 +358,28 @@ export default function CommandCenter({
               <PanelLeft size={14} strokeWidth={1.8} aria-hidden="true" />
               <span>Context</span>
             </button>
+
+            {/*
+              PiP 복귀 — 명시적 조작.
+
+              orb(.core-trigger)가 Command Center 중앙 컬럼(composer + runtime
+              패널) 아래에 완전히 숨어 있으므로, composer를 클릭 가능하게 만들면
+              orb 클릭으로는 PiP로 돌아갈 수 없게 된다. 그래로 두면 복귀 경로가
+              사라지므로, 같은 일을 하는 명시적 버튼을 여기 둔다. orb는 이제
+              PiP에서의 진입 조작으로만 의미가 있다.
+            */}
+            {onReturnToPip && (
+              <button
+                type="button"
+                className="jarvis-pip-button"
+                onClick={onReturnToPip}
+                aria-label="Return JARVIS to PiP"
+                title="Return JARVIS to PiP"
+              >
+                <Minimize2 size={14} strokeWidth={1.8} aria-hidden="true" />
+                <span>PiP</span>
+              </button>
+            )}
 
             {runtime.scratch && (
               <div className="jarvis-scratch-badge">SCRATCH</div>

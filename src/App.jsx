@@ -842,6 +842,7 @@ function App() {
           onLinkFileToFocus={handleLinkFileToFocus}
           contextOpen={contextOpen}
           onToggleContext={() => setContextOpen((open) => !open)}
+          onReturnToPip={returnToPip}
         />
       )}
 

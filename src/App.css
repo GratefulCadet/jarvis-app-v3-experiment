@@ -682,6 +682,24 @@
   }
 }
 
+/*
+  장식 ring은 클릭을 가로채지 않는다.
+
+  orb의 유일한 상호작용 요소는 .core-trigger(96px 버튼)이고 ring 컨테이너에는
+  핸들러가 없다. 그런데 ring은 그 위를 그대로 hit-test해, Command Center에서
+  composer 입력창(.jarvis-command-input)의 중앙을 덮었다. 사용자가 입력창 한가운데
+  를 클릭하면(캐럿을 놓으려고 누르는 가장 자연스러운 자리) 클릭이 ring에 먹혀
+  입력이 focusing되지 않았다. 왼쪽 약 30%, 오른쪽 약 15%만 통과가 가능했다.
+
+  pointer-events만 끄므로 화면은 전혀 바뀌지 않고, 실제로 동작하던 요소도
+  줄지 않는다 — trigger만 다시 auto로 되돌린다.
+*/
+.core-outer-ring,
+.core-orbit-layer,
+.core-middle-ring {
+  pointer-events: none;
+}
+
 .core-trigger {
   appearance: none;
 
@@ -701,6 +719,8 @@
   background: transparent;
 
   cursor: pointer;
+
+  pointer-events: auto;
 
   -webkit-app-region: no-drag;
 }
@@ -2285,6 +2305,26 @@
    - Motion Primitives의 아이디어를 "효과 복붙"이 아니라
      interaction language로 재구현
    ================================================== */
+
+/*
+  Command Center에서는 composer가 orb보다 위에 있어야 한다.
+
+  .pip-interaction-zone(z-index 4)이 Command Center 인터페이스(z-index 2)보다
+  위에 있고, 두 요소가 같은 중심을 공유한다. 그래서 orb의 trigger 버튼이
+  composer 입력창(.jarvis-command-input) 중앙을 덮었고, 사용자가 캐럿을 놓으려고
+  입력창 한가운데를 클릭하면 클릭이 orb에 먹혀 PiP 토글이 발동했다(입력 안 됨).
+
+  여기서 CC 인터페이스를 zone 위로 올리면 composer가 항상 클릭을 받는다.
+  orb은 CC가 덮지 않는 부분(입력창 위아래)에서만 클릭된다 — 그 점이 PiP로 돌아가는
+  유일한 조작이라 그 부분은 반드시 살아 있다. 입력 배경이 반투명이라 orb는 뒤에서
+  희미하게 비쳐 보인다.
+
+  PiP 모드에서는 이 override가 적용되지 않아 orb가 그대로 최상위다.
+*/
+.command-center-mode
+.command-center-interface {
+  z-index: 5;
+}
 
 .command-center-interface {
   position: absolute;
@@ -9205,7 +9245,8 @@
   display: none;
 }
 
-.jarvis-context-button {
+.jarvis-context-button,
+.jarvis-pip-button {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -9221,13 +9262,16 @@
 
 .jarvis-context-button:hover,
 .jarvis-context-button.is-active,
-.jarvis-context-button:focus-visible {
+.jarvis-context-button:focus-visible,
+.jarvis-pip-button:hover,
+.jarvis-pip-button:focus-visible {
   border-color: rgba(255, 255, 255, 0.42);
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.94);
 }
 
-.jarvis-context-button:focus-visible {
+.jarvis-context-button:focus-visible,
+.jarvis-pip-button:focus-visible {
   outline: 1px solid rgba(255, 255, 255, 0.56);
   outline-offset: 2px;
 }
