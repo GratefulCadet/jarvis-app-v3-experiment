@@ -877,6 +877,22 @@
    Command Center idle
    ================================================== */
 
+/*
+   UX 정리(사용자 피드백) — Core 가운데 위, Ask는 Core 아래.
+
+   pip-interaction-zone(Core+PiP 컨테이너)과 command-panel은 둘 다
+   그리드 중앙 정렬이었다. 이제:
+   - Core: 화면 상단 22% 지점 중앙 (장식 오빗 한가운데)
+   - 패널(composer+runtime): 그 아래 60% 지점 중앙
+   두 요소가 절대 겹치지 않고, Core 클릭 = PiP 복귀가 화면에서 보인다.
+*/
+.command-center-mode .pip-interaction-zone {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translate(-50%, -50%);
+}
+
 .command-center-mode
 .core-container {
   transform:
@@ -885,7 +901,7 @@
       0,
       0
     )
-    scale(1);
+    scale(0.85);
 }
 
 /* ==================================================
@@ -7318,9 +7334,18 @@
 }
 
 /* Human-editable Workspace File MVP */
+/*
+  파일 편집기 — 오른쪽 사이드 시트(피드백 5번 + 회귀에서 배운 것).
+  전체 화면 모달이면 파일을 보는 동안 composer를 가린다(질문이 막힘).
+  drawer와 같은 쪽 오른쪽에 고정 폭 시트로 붙여 composer는 항상 살아 있다.
+  (document.body 포털 위에서 렌더되므로 fixed가 진짜 viewport 기준이다.)
+*/
 .workspace-file-editor {
   position: fixed;
-  inset: 8vh 8vw;
+  top: 18px;
+  right: 18px;
+  bottom: 18px;
+  width: min(560px, 38vw);
   z-index: 40;
   display: flex;
   flex-direction: column;
@@ -7825,6 +7850,54 @@
   translate: -50% 0;
 
   transform-origin: 50% 100%;
+}
+
+/*
+  dock 제거 후 — popover는 drawer 안에서 연다(헤더의 + 버튼 등).
+  drawer 기준으로 중앙 상단 근처에 띄워 목록을 가리지 않게 한다.
+*/
+.v4-context-drawer .tree-prototype-popover {
+  left: 50%;
+  top: 104px;
+  bottom: auto;
+  z-index: 30;
+  width: min(360px, calc(100% - 24px));
+  translate: -50% 0;
+  transform-origin: 50% 0;
+}
+
+/* drawer 헤더의 액션 버튼들(+ / 설정 / 삭제) */
+.tree-prototype-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.tree-prototype-header-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+}
+
+.tree-prototype-header-btn:hover:not(:disabled),
+.tree-prototype-header-btn:focus-visible {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.tree-prototype-header-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 @keyframes tree-field-precess {
@@ -8581,6 +8654,46 @@
   padding: 3px 7px;
 }
 
+/*
+  UX Continuity — context 한 줄. Project · Focus · Active File을
+  헤더에서 한 번에 읽게 한다. 강조는 최소: 읽는 것이 목적이다.
+*/
+.jarvis-context-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--jarvis-text-muted);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.jarvis-context-line-project {
+  color: var(--jarvis-text-soft);
+  font-weight: 600;
+}
+
+.jarvis-context-line-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+  composer continuity — 대기 중 요청 배지. 사용자의 말이 버려지지
+  않았다는 것을 보여준다.
+*/
+.jarvis-queued-note {
+  margin: 6px 0 0;
+  padding: 4px 8px;
+  border: 1px dashed var(--jarvis-border-strong);
+  border-radius: 8px;
+  color: var(--jarvis-text-soft);
+  font-size: 10px;
+}
+
 .jarvis-command-form {
   display: flex;
   gap: 8px;
@@ -9228,13 +9341,18 @@
    ================================================== */
 
 .v4-assistant-shell.command-center-mode .command-panel-runtime {
-  top: 50%;
-  left: 50%;
-  width: min(760px, calc(100vw - 64px));
-  max-height: min(720px, calc(100vh - 64px));
+  top: 132px;
+  bottom: 32px;
+  left: max(32px, calc((100vw - 1040px) / 2));
+  width: min(1040px, calc(100vw - 64px));
+  max-height: none;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
   overflow: auto;
   pointer-events: auto;
-  transform: translate(-50%, -50%);
+  transform: none;
 }
 
 .v4-assistant-shell.command-center-mode .command-panel-objective,
@@ -9363,26 +9481,71 @@
   right: 18px;
 }
 
+/* dock 제거 — 목록이 drawer 하단까지 쓴다 */
 .v4-context-drawer .tree-prototype-overview-list {
   top: 96px;
   left: 18px;
   right: 18px;
-  bottom: 78px;
+  bottom: 14px;
   mask-image: none;
 }
 
-.v4-context-drawer .tree-prototype-dock {
-  left: 18px;
-  right: 18px;
-  bottom: 18px;
-  width: auto;
-  justify-content: flex-start;
-  overflow-x: auto;
-  border-radius: 12px;
+/* dock 제거 (2026-09 UX 정리) — 규칙은 남기지 않는다 */
+
+/*
+  FILES 탐색기(4번) — dir 행. 클릭으로 펼치고/접는다. chevron 회전은 인라인
+  스타일로 하고, 여기선 행 배치만 한다.
+*/
+.tree-prototype-map-row.is-dir {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  padding-left: calc(6px + (var(--map-depth, 0) * 12px));
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
 }
 
-.v4-context-drawer .tree-prototype-dock > button {
-  min-width: 52px;
+.tree-prototype-map-row.is-dir:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tree-prototype-map-row .tree-prototype-map-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  flex: 0 0 auto;
+}
+
+.tree-prototype-map-row .tree-prototype-map-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tree-prototype-files-root-name {
+  margin: 6px 0 2px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 9px;
+  letter-spacing: 0.1em;
 }
 
 .v4-context-section-title {
@@ -9626,11 +9789,103 @@
   color: var(--jarvis-danger-text);
 }
 
+/*
+  PiP mini composer — PiP가 곧 assistant(사용자 피드백 2·3번).
+  orb 아래에 붙는 한 줄 입력. 짧은 요청은 PiP에서 시작해 Assistant로
+  확장된다. pointer-events는 컨테이너가 none이므로 form에서 되살린다.
+*/
+.pip-presence-ask {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 232px;
+  padding: 5px 6px 5px 10px;
+  border: 1px solid var(--jarvis-border-strong);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+}
+
+.pip-presence-ask input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--jarvis-text);
+  font-size: 11px;
+}
+
+.pip-presence-ask input:focus {
+  outline: none;
+}
+
+.pip-presence-ask input::placeholder {
+  color: var(--jarvis-text-muted);
+}
+
+.pip-presence-ask button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--jarvis-border-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--jarvis-text-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pip-presence-ask button:hover:not(:disabled) {
+  border-color: var(--jarvis-border-active);
+  color: var(--jarvis-text);
+}
+
+.pip-presence-ask button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .pip-presence > .jarvis-runtime-panel {
   position: absolute;
   z-index: 2;
   width: 224px;
   pointer-events: auto;
+}
+
+/*
+  PiP done 카드의 행동 힌트 — 카드 전체가 복귀 버튼임을 알려준다.
+*/
+.jarvis-runtime-quiet-hint {
+  margin-top: 4px;
+  color: var(--jarvis-text-muted);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
+/*
+  PiP done 카드 — 클릭 자체가 "Assistant로 복귀" 행동이다.
+  quiet 패널이 PiP 중앙(=두 orb 위)을 덮으므로, 이 카드가 유일하고
+  명확한 복귀 경로여야 한다. hover/키보드 focus를 orb와 같은 언어로 표현한다.
+*/
+.pip-presence-resume {
+  cursor: pointer;
+}
+
+.pip-presence-resume:hover {
+  border-color: var(--jarvis-border-active);
+  background: var(--jarvis-hover);
+}
+
+.pip-presence-resume:focus-visible {
+  outline: 1px solid var(--jarvis-focus-ring);
+  outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -9639,3 +9894,156 @@
     animation: none;
   }
 }
+
+/* Workspace UX: reserve physical space for context and the document. */
+.v4-assistant-shell.command-center-mode { --work-side: min(380px, 32vw); }
+.v4-assistant-shell.command-center-mode[data-file-open="true"] { --work-side: 48vw; }
+.v4-assistant-shell.command-center-mode:is([data-context-open="true"], [data-file-open="true"]) .command-panel-runtime {
+  left: 24px;
+  width: calc(100vw - var(--work-side) - 64px);
+}
+.v4-assistant-shell.command-center-mode .pip-interaction-zone {
+  top: 60px;
+  left: 72px;
+  width: 72px;
+  height: 72px;
+}
+.v4-assistant-shell.command-center-mode .core-container { transform: scale(.28); }
+.jarvis-core-hint {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  padding-left: 48px;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  color: #d5d5dc;
+  font-size: 44px;
+  pointer-events: none;
+}
+.v4-assistant-shell .command-center-orbit-guide,
+.v4-assistant-shell .command-center-axis { display: none; }
+.v4-assistant-shell .command-panel-runtime {
+  border: 1px solid #303039;
+  border-radius: 20px;
+  background: #121216;
+  color: #ededf2;
+}
+.v4-assistant-shell .command-panel-heading-row {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #303039;
+}
+.v4-assistant-shell .command-panel-eyebrow { font-size: 16px; color: #f4f4f7; letter-spacing: .12em; }
+.v4-assistant-shell .jarvis-context-line { flex: 1; font-size: 13px; white-space: normal; }
+.v4-assistant-shell .jarvis-context-button { margin-left: auto; min-height: 36px; font-size: 13px; color: #dddde5; letter-spacing: 0; }
+.v4-assistant-shell .jarvis-command-form {
+  order: 10;
+  position: sticky;
+  bottom: 0;
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: 12px 0 0;
+  background: #121216;
+  z-index: 4;
+}
+.v4-assistant-shell .jarvis-command-input { height: 52px; font-size: 15px; }
+.v4-assistant-shell .jarvis-command-send { min-height: 52px; font-size: 13px; }
+.v4-assistant-shell .jarvis-command-send:not(:disabled) { background: #e1e5ff; color: #171827; }
+.v4-assistant-shell .jarvis-runtime-placeholder { font-size: 16px; line-height: 1.7; color: #bdbdc9; padding: 16px 0; }
+.v4-assistant-shell .jarvis-runtime-panel { flex-shrink: 0; font-size: 14px; }
+.v4-assistant-shell .jarvis-resume-briefing { margin-top: 0; padding: 20px; background: #1b1b23; }
+.v4-assistant-shell .jarvis-resume-heading strong { font-size: 15px; }
+.v4-assistant-shell .jarvis-resume-row { font-size: 13px; gap: 14px; }
+.v4-assistant-shell .jarvis-resume-row > span:first-child { flex-basis: 72px; letter-spacing: 0; }
+.v4-assistant-shell .jarvis-resume-next { padding-top: 16px; margin-top: 16px; }
+.v4-assistant-shell .jarvis-resume-next-text strong { font-size: 17px; line-height: 1.5; }
+.v4-assistant-shell .jarvis-resume-next-text span:not(.jarvis-resume-next-label) { font-size: 13px; line-height: 1.6; }
+.v4-assistant-shell .jarvis-resume-clamp { white-space: normal; overflow-wrap: anywhere; }
+.v4-assistant-shell .jarvis-resume-start { padding: 12px 16px; font-size: 14px; background: #e1e5ff; color: #171827; letter-spacing: 0; }
+.v4-assistant-shell .jarvis-resume-dismiss { width: 28px; height: 28px; }
+.v4-assistant-shell .jarvis-focus-indicator { margin: 0; padding: 12px; font-size: 14px; }
+.v4-assistant-shell .jarvis-active-file-container { margin: 0; gap: 10px; }
+.v4-assistant-shell .jarvis-active-file-chip,
+.v4-assistant-shell .jarvis-quick-action-btn { min-height: 32px; font-size: 12px; }
+.v4-assistant-shell .v4-context-drawer { top: 132px; bottom: 32px; right: 24px; width: var(--work-side); background: #121216; }
+.workspace-file-editor {
+  box-sizing: border-box;
+  top: 132px;
+  right: 24px;
+  bottom: 32px;
+  width: calc(48vw - 0px);
+  background: #16161c;
+  color: #ededf2;
+}
+.workspace-file-editor textarea { min-height: 0; width: 100%; box-sizing: border-box; font-size: 14px; line-height: 1.7; }
+.workspace-file-editor-header > div { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 1000px) and (min-width: 501px) {
+  .v4-assistant-shell.command-center-mode .command-panel-runtime { top: 108px; bottom: 16px; padding: 16px; }
+  .v4-assistant-shell.command-center-mode:is([data-context-open="true"], [data-file-open="true"]) .command-panel-runtime {
+    left: 16px; width: calc(54vw - 32px);
+  }
+  .v4-assistant-shell .v4-context-drawer,
+  .workspace-file-editor { top: 108px; right: 16px; bottom: 16px; width: calc(46vw - 16px); }
+  .v4-assistant-shell .jarvis-resume-next { flex-wrap: wrap; }
+  .v4-assistant-shell .jarvis-resume-next-text { flex-basis: 100%; }
+}
+.v4-assistant-shell.command-center-mode .core-container {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(.28);
+}
+.v4-assistant-shell.command-center-mode .core-trigger { width: 260px; height: 260px; }
+.jarvis-core-hint { padding-left: 8px; font-size: 14px; }
+/* PiP has one invocation orb, a status row, and a separate request field. */
+.pip-mode .pip-presence {
+  inset: 0;
+  border: 1px solid #34343d;
+  border-radius: 24px;
+  background: #15151b;
+}
+.pip-mode .pip-presence-orb { position: absolute; top: 6px; width: 84px; height: 84px; }
+.pip-mode .pip-presence-orb-core { width: 44px; height: 44px; }
+.pip-mode .pip-presence-orb-ring { inset: 4px; }
+.pip-mode .pip-presence-orb-ring-b { inset: 14px; }
+.pip-mode .pip-presence-orb-trigger { width: 84px; height: 84px; }
+.pip-mode .pip-presence-copy { top: 92px; transform: translateX(-50%); gap: 5px; }
+.pip-mode .pip-presence-status { font-size: 12px; }
+.pip-mode .pip-presence-focus { display: none; }
+.pip-mode .pip-presence > .jarvis-runtime-panel { top: 142px; max-height: 62px; overflow: auto; }
+.pip-mode .pip-presence > .jarvis-runtime-panel.is-permission { top: 12px; max-height: 190px; }
+.pip-mode .pip-presence-open,
+.pip-mode .pip-presence-attention { top: auto; bottom: 54px; }
+.pip-mode .pip-presence-ask { box-sizing: border-box; height: 36px; bottom: 12px; background: #23232b; }
+.v4-assistant-shell .jarvis-empty-guidance { margin: 12px 0 0; color: #bdbdc9; font-size: 14px; line-height: 1.8; }
+.v4-assistant-shell .jarvis-runtime-text { font-size: 15px; line-height: 1.8; }
+/* Responses scroll independently; the composer never covers a next action. */
+.v4-assistant-shell.command-center-mode .command-panel-runtime { overflow: hidden; }
+.v4-assistant-shell .command-panel-heading-row,
+.v4-assistant-shell .jarvis-focus-indicator,
+.v4-assistant-shell .jarvis-active-file-container { flex-shrink: 0; }
+.jarvis-conversation { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding-right: 4px; }
+.jarvis-conversation > * { flex-shrink: 0; }
+.v4-assistant-shell .jarvis-command-form { position: static; margin-top: 0; padding-top: 0; }
+/* Trace details remain available under the expandable execution history. */
+.jarvis-conversation .jarvis-runtime-trace { display: none; }
+.pip-result-button {
+  position: absolute;
+  top: 142px;
+  width: 224px;
+  height: 62px;
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid #41414c;
+  border-radius: 12px;
+  background: #22222c;
+  color: #e7e7f0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.pip-result-button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.pip-result-button strong { font-size: 12px; }
+.pip-result-button:focus-visible { outline: 2px solid #d6dcff; outline-offset: 2px; }

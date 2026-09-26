@@ -113,6 +113,15 @@ function registerBridgeIpc({ ipcMain, app }) {
     return manager.treeSnapshot()
   })
 
+  /* UX Continuity — 첫 열림 곧 브리핑 (read-only, 모델 호출 없음). */
+  ipcMain.handle('jarvis:get-resume-briefing', async (_event, payload) => {
+    return manager.getResumeBriefing(
+      typeof payload?.projectId === 'string' && payload.projectId.trim()
+        ? payload.projectId.trim()
+        : undefined,
+    )
+  })
+
   ipcMain.handle('jarvis:pages-snapshot', async () => {
     return manager.pagesSnapshot()
   })

@@ -69,6 +69,13 @@ contextBridge.exposeInMainWorld(
     bridgeStatus: () => {
       return ipcRenderer.invoke('jarvis:bridge-status')
     },
+
+    /* UX Continuity — 첫 열림 곧 브리핑 (read-only). */
+    getResumeBriefing: (projectId) => {
+      return ipcRenderer.invoke('jarvis:get-resume-briefing', {
+        projectId,
+      })
+    },
   },
 )
 

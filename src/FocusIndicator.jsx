@@ -7,7 +7,7 @@ export default function FocusIndicator({ executionContext }) {
 
   return (
     <div className="jarvis-focus-indicator" aria-label="Current focus">
-      <span className="jarvis-focus-label">FOCUS</span>
+      <span className="jarvis-focus-label">현재 작업</span>
       <span>{label}</span>
     </div>
   )

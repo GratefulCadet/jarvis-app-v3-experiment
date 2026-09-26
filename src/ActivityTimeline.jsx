@@ -27,7 +27,9 @@ export default function ActivityTimeline({
   traceId,
   tracePath,
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
+
+  if (!timeline.length && !traceId && !tracePath) return null
 
   return (
     <section className="jarvis-activity-timeline">
@@ -38,7 +40,7 @@ export default function ActivityTimeline({
         aria-expanded={open}
       >
         <span>
-          Activity
+          실행 기록
         </span>
         <span className="jarvis-timeline-count">
           {timeline.length}
@@ -48,7 +50,7 @@ export default function ActivityTimeline({
         </span>
       </button>
 
-      {(traceId || tracePath) && (
+      {open && (traceId || tracePath) && (
         <div className="jarvis-timeline-trace">
           {traceId && (
             <span>trace: {traceId}</span>

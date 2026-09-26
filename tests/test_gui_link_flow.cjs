@@ -536,11 +536,11 @@ async function main() {
     console.log('  composer 중앙 클릭 가능 확인')
 
     // 회귀 방어 (2): PiP로 돌아가는 길이 Command Center에 남아 있어야 한다.
-    // orb(.core-trigger)은 중앙 컬럼 아래에 숨어 있어 composer 우선 시 클릭을
-    // 받지 못한다 — 그래서 명시적 버튼(.jarvis-pip-button)이 그 자리를 대신한다.
-    // 존재와 실제 hit 가능성만 확인한다(누르지는 않는다 — view가 바뀌므로).
+    // UX 정리로 명시적 PiP 버튼은 제거됐고, Core 클릭(.core-trigger)이 복귀
+    // 조작이다. 존재와 실제 hit 가능성만 확인한다(누르지는 않는다 — view가
+    // 바뀌므로).
     const pipReturn = await cdp.evalJs(`
-      const btn = document.querySelector('.jarvis-pip-button');
+      const btn = document.querySelector('.core-trigger');
       if (!btn) return { ok: false, why: 'no-button' };
       const r = btn.getBoundingClientRect();
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
@@ -552,10 +552,10 @@ async function main() {
     `)
     if (!pipReturn.ok) {
       fail(
-        `Command Center에서 PiP 복귀 버튼이 클릭 불가 (복귀 경로 소실): ${JSON.stringify(pipReturn)}`,
+        `Command Center에서 Core(PiP 복귀)가 클릭 불가 (복귀 경로 소실): ${JSON.stringify(pipReturn)}`,
       )
     }
-    console.log(`  PiP 복귀 버튼 확인: "${pipReturn.label}" @ [${pipReturn.rect}]`)
+    console.log(`  PiP 복귀 경로(Core) 확인: "${pipReturn.label}" @ [${pipReturn.rect}]`)
     const composer = `
       Array.from(document.querySelectorAll('textarea, input[type="text"]'))
         .find((el) => el.offsetParent !== null && !el.disabled)
@@ -564,7 +564,7 @@ async function main() {
     await sleep(300)
     await cdp.shot('04-typed')
     await cdp.realClick(
-      "Array.from(document.querySelectorAll('button')).find((b) => b.textContent.trim() === 'Send')",
+      "document.querySelector('.jarvis-command-send')",
       'Send 버튼',
     )
 

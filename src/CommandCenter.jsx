@@ -15,7 +15,6 @@ import {
   FileText,
   Link2,
   Mic,
-  Minimize2,
   PanelLeft,
   Sparkles,
   Volume2,
@@ -73,13 +72,27 @@ function ResumeBriefingPanel({ briefing, onStartTask, onDismiss }) {
     .filter(Boolean)
   const fileNames = [...nextFiles, ...otherFiles]
 
+  if (!nextAction && !tasks?.open_count) {
+    return (
+      <section className="jarvis-resume-briefing" aria-label="Resume briefing">
+        <div className="jarvis-resume-heading">
+          <strong>어떤 일을 시작할까요?</strong>
+        </div>
+        <p className="jarvis-empty-guidance">
+          아래에 요청을 적어주세요. 파일을 함께 보려면 ‘작업 · 파일’을 열면 됩니다.
+          새 작업을 만들거나 내용을 변경할 때는 먼저 승인을 요청합니다.
+        </p>
+      </section>
+    )
+  }
+
   return (
     <section
       className="jarvis-resume-briefing"
       aria-label="Resume briefing"
     >
       <div className="jarvis-resume-heading">
-        <span className="jarvis-resume-title">RESUME</span>
+        <span className="jarvis-resume-title">이어서 할 일</span>
         <strong>{project?.title || project?.id}</strong>
         {onDismiss && (
           <button
@@ -96,20 +109,20 @@ function ResumeBriefingPanel({ briefing, onStartTask, onDismiss }) {
 
       <div className="jarvis-resume-rows">
         <div className="jarvis-resume-row">
-          <span>Tasks</span>
+          <span>작업 현황</span>
           <span>
-            {tasks?.open_count ?? 0} open · {tasks?.completed_count ?? 0} done
+            진행 중 {tasks?.open_count ?? 0} · 완료 {tasks?.completed_count ?? 0}
           </span>
         </div>
         {recent?.summary && (
           <div className="jarvis-resume-row">
-            <span>Last</span>
+            <span>최근 활동</span>
             <span className="jarvis-resume-clamp">{recent.summary}</span>
           </div>
         )}
         {fileNames.length > 0 && (
           <div className="jarvis-resume-row">
-            <span>Files</span>
+            <span>관련 파일</span>
             <span className="jarvis-resume-clamp">
               {fileNames.slice(0, 3).join(' · ')}
             </span>
@@ -119,7 +132,7 @@ function ResumeBriefingPanel({ briefing, onStartTask, onDismiss }) {
 
       <div className="jarvis-resume-next">
         <div className="jarvis-resume-next-text">
-          <span className="jarvis-resume-next-label">NEXT</span>
+          <span className="jarvis-resume-next-label">다음 행동</span>
           {nextAction ? (
             <>
               <strong>{nextAction.title}</strong>
@@ -145,7 +158,7 @@ function ResumeBriefingPanel({ briefing, onStartTask, onDismiss }) {
             onClick={() => onStartTask(nextAction)}
             title="이 작업을 현재 초점으로 시작"
           >
-            시작
+            이어서 작업
           </button>
         )}
       </div>
@@ -167,9 +180,9 @@ export default function CommandCenter({
   onCloseActiveFile,
   onStartTask,
   onLinkFileToFocus,
+  activeProjectTitle,
   contextOpen = false,
   onToggleContext,
-  onReturnToPip,
 }) {
   const rootRef = useRef(null)
   const promptInputRef = useRef(null)
@@ -275,6 +288,10 @@ export default function CommandCenter({
     return () => scope.revert()
   }, [])
 
+  /*
+    composer continuity — busy 중 제출은 큐에 적립된다(최대 1개).
+    입력창은 죽지 않고, 사용자의 말은 순서대로 처리된다.
+  */
   const handleJarvisSubmit = (event) => {
     event.preventDefault()
 
@@ -284,7 +301,7 @@ export default function CommandCenter({
       return
     }
 
-    runtime.submit(trimmed, runtime.projectId, {
+    runtime.submitOrQueue(trimmed, runtime.projectId, {
       activeFile: activeFile
         ? {
             fileId: activeFile.fileId,
@@ -342,6 +359,22 @@ export default function CommandCenter({
           <div className="command-panel-heading-row">
             <div className="command-panel-eyebrow">JARVIS</div>
 
+            {/*
+              UX Continuity — context 한 줄.
+              Project · Focus · Active File을 헤더에서 한 번에 읽게 한다.
+              상태를 기억하거나 drawer를 열어 확인할 필요를 줄인다.
+              알려진 context가 하나도 없으면 줄 자체를 숨긴다(빈 라벨 금지).
+            */}
+            {(activeProjectTitle || focusNode?.label || activeFile) && (
+              <div className="jarvis-context-line" aria-label="Current context">
+                {activeProjectTitle && (
+                  <span className="jarvis-context-line-project">
+                    프로젝트 · {activeProjectTitle}
+                  </span>
+                )}
+              </div>
+            )}
+
             <button
               type="button"
               className={[
@@ -356,30 +389,13 @@ export default function CommandCenter({
               title="Show or hide Projects, Tasks, Files, and Pages"
             >
               <PanelLeft size={14} strokeWidth={1.8} aria-hidden="true" />
-              <span>Context</span>
+              <span>작업 · 파일</span>
             </button>
 
             {/*
-              PiP 복귀 — 명시적 조작.
-
-              orb(.core-trigger)가 Command Center 중앙 컬럼(composer + runtime
-              패널) 아래에 완전히 숨어 있으므로, composer를 클릭 가능하게 만들면
-              orb 클릭으로는 PiP로 돌아갈 수 없게 된다. 그래로 두면 복귀 경로가
-              사라지므로, 같은 일을 하는 명시적 버튼을 여기 둔다. orb는 이제
-              PiP에서의 진입 조작으로만 의미가 있다.
+              UX 정리 — PiP 버튼 제거. 복귀는 Core 클릭 또는 Escape다.
+              헤더는 JARVIS 식별 + context 한 줄 + Context 토글 + SCRATCH만 남는다.
             */}
-            {onReturnToPip && (
-              <button
-                type="button"
-                className="jarvis-pip-button"
-                onClick={onReturnToPip}
-                aria-label="Return JARVIS to PiP"
-                title="Return JARVIS to PiP"
-              >
-                <Minimize2 size={14} strokeWidth={1.8} aria-hidden="true" />
-                <span>PiP</span>
-              </button>
-            )}
 
             {runtime.scratch && (
               <div className="jarvis-scratch-badge">SCRATCH</div>
@@ -534,20 +550,16 @@ export default function CommandCenter({
               type="text"
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
-              placeholder="Ask JARVIS…"
-              disabled={runtimeBusy}
+              placeholder={activeFile ? '이 파일에 대해 무엇을 도와드릴까요?' : '무엇을 도와드릴까요?'}
               aria-label="JARVIS command input"
             />
 
             <button
               type="submit"
               className="jarvis-command-send"
-              disabled={
-                !prompt.trim() ||
-                runtimeBusy
-              }
+              disabled={!prompt.trim() || (runtimeBusy && runtime.pendingSubmit)}
             >
-              Send
+              보내기
             </button>
 
             <button
@@ -635,6 +647,7 @@ export default function CommandCenter({
             </div>
           )}
 
+          <div className="jarvis-conversation" aria-label="JARVIS 응답과 다음 행동">
           <JarvisRuntimePanel
             runtime={runtime}
             onApprove={runtime.approve}
@@ -642,21 +655,35 @@ export default function CommandCenter({
             onDismiss={runtime.dismiss}
           >
             <div className="jarvis-runtime-placeholder">
-              {runtime.text || '할 일을 물어보거나, 새 task를 추가해보세요.'}
+              {runtime.text || '요청을 입력하거나 작업 · 파일에서 자료를 열어보세요.'}
             </div>
           </JarvisRuntimePanel>
 
-          <ResumeBriefingPanel
-            briefing={runtime.resumeBriefing}
-            onStartTask={onStartTask}
-            onDismiss={runtime.dismissBriefing}
-          />
+          {/*
+            UX Continuity — 브리핑 우선순위: 모델 응답 브리핑(resume)이 이기고,
+            없으면 첫 열림 자동 브리핑을 보인다. dismiss는 둘 다 지우므로
+            자동 브리핑이 다시 뜨지 않는다.
+          */}
+          {(runtime.resumeBriefing || runtime.autoBriefing) && (
+            <ResumeBriefingPanel
+              briefing={runtime.resumeBriefing || runtime.autoBriefing}
+              onStartTask={onStartTask}
+              onDismiss={runtime.dismissBriefing}
+            />
+          )}
+
+          {runtime.pendingSubmit && (
+            <div className="jarvis-queued-note" role="status">
+              대기 중: “{runtime.pendingSubmit.text.slice(0, 40)}{runtime.pendingSubmit.text.length > 40 ? '…' : ''}”
+            </div>
+          )}
 
           <ActivityTimeline
             timeline={runtime.timeline}
             traceId={runtime.traceId}
             tracePath={runtime.tracePath}
           />
+          </div>
         </article>
       </div>
     </section>

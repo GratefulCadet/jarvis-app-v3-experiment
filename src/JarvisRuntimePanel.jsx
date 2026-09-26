@@ -62,7 +62,10 @@ function LinkAffordance({ runtime, compact = false }) {
         <button
           type="button"
           className="jarvis-link-skip"
-          onClick={runtime.dismissLinkAffordance}
+          onClick={(event) => {
+            event.stopPropagation()
+            runtime.dismissLinkAffordance()
+          }}
         >
           Dismiss
         </button>
@@ -85,7 +88,11 @@ function LinkAffordance({ runtime, compact = false }) {
         <button
           type="button"
           className="jarvis-link-button"
-          onClick={runtime.linkActiveFile}
+          onClick={(event) => {
+            // PiP done 카드가 복귀 버튼이므로 링크 클릭이 복귀로 이어지지 않게 막는다.
+            event.stopPropagation()
+            runtime.linkActiveFile()
+          }}
           disabled={busy}
         >
           {busy ? 'Linking…' : 'Link file'}
@@ -93,7 +100,10 @@ function LinkAffordance({ runtime, compact = false }) {
         <button
           type="button"
           className="jarvis-link-skip"
-          onClick={runtime.dismissLinkAffordance}
+          onClick={(event) => {
+            event.stopPropagation()
+            runtime.dismissLinkAffordance()
+          }}
           disabled={busy}
         >
           Not now
@@ -108,6 +118,7 @@ export default function JarvisRuntimePanel({
   onApprove,
   onReject,
   onDismiss,
+  onReturnToMain,
   children,
   variant = 'full',
   pipMode = false,
@@ -216,16 +227,32 @@ export default function JarvisRuntimePanel({
         않는다 (Command Center 자체 패널이 전체 답변을 보여준다).
       - 실제 PiP 상태에서는 답변 전체 대신 짧은 완료 알림만 보여준다.
     */
-    if (
-      variant === 'quiet' &&
-      (hideDone || !pipMode)
-    ) {
-      return children
-    }
-
     if (variant === 'quiet') {
+      if (hideDone || !pipMode) {
+        return children
+      }
+
+      /*
+        PiP done — 읽기 전용 알림이 아니라 곧바로 복귀하는 카드다.
+        이 quiet 패널이 PiP 중앙을 덮는 바람에 DONE 상태에서 orb 클릭이
+        전부 패널로 흡수되어 복귀 경로가 사라지는 dead-end가 실측됐었다
+        (UX audit 2026-09: pip-presence-orb-trigger / core-trigger hitSelf=false).
+        새 요소를 더하지 않는다 — 패널 자체가 복귀 행동이 된다.
+      */
       return (
-        <div className="jarvis-runtime-panel is-done is-quiet" aria-live="polite">
+        <div
+          className="jarvis-runtime-panel is-done is-quiet pip-presence-resume"
+          role="button"
+          tabIndex={0}
+          aria-label="Open JARVIS Assistant"
+          onClick={() => onReturnToMain?.()}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              onReturnToMain?.()
+            }
+          }}
+        >
           <div className="jarvis-runtime-heading">
             <span className="jarvis-runtime-status-text">
               Done
@@ -238,7 +265,13 @@ export default function JarvisRuntimePanel({
           </div>
 
           <div className="jarvis-runtime-quiet-note">
-            응답 완료 — 자세한 답변은 Command Center에서 확인하세요.
+            {text
+              ? `${text.length > 90 ? `${text.slice(0, 90)}…` : text}`
+              : '클릭하면 Assistant에서 전체 응답을 확인합니다.'}
+          </div>
+
+          <div className="jarvis-runtime-quiet-hint">
+            클릭 — Assistant로 복귀
           </div>
 
           <LinkAffordance runtime={runtime} compact />

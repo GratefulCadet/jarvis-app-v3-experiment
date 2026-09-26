@@ -167,6 +167,16 @@ class BridgeManager {
     return this._call({ type: 'tree_snapshot' })
   }
 
+  /*
+    UX Continuity — 첫 열림 곧 브리핑. 모델 도구 resume_briefing와 같은
+    결정적 조립을 read-only로 직접 읽는다(모델 호출 없음).
+  */
+  async getResumeBriefing(projectId) {
+    const message = { type: 'get_resume_briefing' }
+    if (projectId) message.project_id = projectId
+    return this._call(message)
+  }
+
   async pagesSnapshot() {
     return this._call({ type: 'pages_snapshot' })
   }

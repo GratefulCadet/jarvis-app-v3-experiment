@@ -50,6 +50,16 @@ const RUNTIME_EVENT = Object.freeze({
   LINK_ACTIVE_FILE: 'link-active-file',
   LINK_ACTIVE_FILE_RESOLVED: 'link-active-file-resolved',
   DISMISS_LINK: 'dismiss-link',
+  /*
+    UX Continuity — 자동 복귀 브리핑. 모델 도구와 같은 결정적 조립을
+    read-only 브리지 경로로 직접 읽어 온다(모델 호출 없음).
+  */
+  AUTO_BRIEFING: 'auto-briefing',
+  /*
+    composer continuity — 승인/실행 중에도 입력을 받아 순서대로 처리한다.
+  */
+  QUEUE_SUBMIT: 'queue-submit',
+  QUEUE_SHIFT: 'queue-shift',
 })
 
 const createInitialRuntime = () => ({
@@ -67,8 +77,19 @@ const createInitialRuntime = () => ({
     bridge events의 resume_briefing tool data를 그대로 보관한다 — 파생·일시적
     표시 상태이며 영속 엔티티가 아니다(V4 §6). 새 브리핑이 오거나 사용자가
     닫을 때까지 유지된다.
+
+    UX Continuity — 첫 열림 곧 브리핑:
+      - autoBriefing: 브리지 read-only 경로로 직접 읽은 마지막 브리핑.
+        모델 응답으로 도착하는 resumeBriefing이 항상 이긴다(최신 우선).
+      - autoBriefingState: idle | loading | ready | error | empty
+      - pendingSubmit: 승인/실행 중에도 composer로 받은 다음 요청(최대 1개).
+        턴이 끝나면 자동으로 이어서 처리한다 — 말이 죽지 않는 대화.
   */
   resumeBriefing: null,
+  autoBriefing: null,
+  autoBriefingState: 'idle',
+  autoBriefingError: null,
+  pendingSubmit: null,
   /*
     Task 상태 변경 신호 — Qwen이 tool loop으로 task를 실제로 변경했을 때만 올라간다.
 
@@ -255,6 +276,38 @@ const runtimeReducer = (state, event) => {
       return next
     }
 
+    /*
+      UX Continuity — 브리지 read-only 브리핑 도착. 모델 응답 브리핑이
+      없을 때만 채운다(모델 응답이 더 최신이므로).
+    */
+    case RUNTIME_EVENT.AUTO_BRIEFING:
+      if (event.error) {
+        return {
+          ...state,
+          autoBriefingState: 'error',
+          autoBriefingError: event.error,
+        }
+      }
+      return {
+        ...state,
+        autoBriefing: event.briefing || null,
+        autoBriefingState: event.briefing ? 'ready' : 'empty',
+        autoBriefingError: null,
+      }
+
+    case RUNTIME_EVENT.QUEUE_SUBMIT:
+      // 하나만 대기시킨다 — 대화는 순서대로, 대기는 UI에 보인다.
+      return {
+        ...state,
+        pendingSubmit: { text: event.text, activeFile: event.activeFile || null },
+      }
+
+    case RUNTIME_EVENT.QUEUE_SHIFT:
+      return {
+        ...state,
+        pendingSubmit: null,
+      }
+
     case RUNTIME_EVENT.PERMISSION_REQUIRED:
       return pushTimeline(
         {
@@ -357,6 +410,8 @@ const runtimeReducer = (state, event) => {
         error: null,
         toolCall: null,
         createdTask: null,
+        // 사용자가 결과를 치웠으면 대기 중 요청도 함께 치운다.
+        pendingSubmit: null,
         linkState: {
           status: 'idle',
           error: null,
@@ -418,6 +473,8 @@ const runtimeReducer = (state, event) => {
       return {
         ...state,
         resumeBriefing: null,
+        autoBriefing: null,
+        autoBriefingState: 'empty',
       }
 
     default:
@@ -603,6 +660,52 @@ export default function useJarvisRuntime() {
   }, [])
 
   /*
+    UX Continuity — 앱이 먼저 브리핑을 제시한다.
+    브리지 read-only 경로(get_resume_briefing)를 한 번 읽어 온다.
+    실패해도 흐름을 깨지 않는다 — 브리핑은 있으면 좋은 것, 필수가 아니다.
+  */
+  const loadAutoBriefing = useCallback(async (projectId) => {
+    const api = getRuntimeApi()
+    if (!api || typeof api.getResumeBriefing !== 'function') {
+      return
+    }
+    try {
+      const response = await api.getResumeBriefing(projectId)
+      const briefing = response && response.status === 'ok' ? response.briefing : null
+      dispatch({
+        type: RUNTIME_EVENT.AUTO_BRIEFING,
+        briefing,
+        error: response && response.status !== 'ok' ? response.error : null,
+      })
+    } catch (err) {
+      dispatch({ type: RUNTIME_EVENT.AUTO_BRIEFING, error: String(err?.message || err) })
+    }
+  }, [])
+
+  /*
+    composer continuity — busy 중 제출은 큐에 넣고, 턴이 끝나면
+    이어서 보낸다. submit 자체는 busy 중 무시하므로 여기서 판단한다.
+  */
+  const submitOrQueue = useCallback((text, projectId, options) => {
+    const trimmed = typeof text === 'string' ? text.trim() : ''
+    if (!trimmed) return
+    const busy =
+      stateRef.current.status === RUNTIME_STATUS.THINKING ||
+      stateRef.current.status === RUNTIME_STATUS.TOOL_RUNNING ||
+      stateRef.current.status === RUNTIME_STATUS.AWAITING_CONFIRMATION
+    if (!busy) {
+      void submit(text, projectId, options)
+      return
+    }
+    if (stateRef.current.pendingSubmit) return
+    dispatch({
+      type: RUNTIME_EVENT.QUEUE_SUBMIT,
+      text: trimmed,
+      activeFile: (options && options.activeFile) || null,
+    })
+  }, [submit])
+
+  /*
     Milestone B — 사용자의 명시적 클릭에서만 canonical ResourceLink를 만든다.
 
     jarvisLinkApi.linkTaskFile은 트리 팝오버와 App의 M2 링크가 이미 쓰는
@@ -646,6 +749,44 @@ export default function useJarvisRuntime() {
     }
   }, [])
 
+  /*
+    composer continuity — busy 턴이 끝나면(pendingSubmit이 있고 status가
+    done/idle/error) 대기 중 요청을 이어서 보낸다. awaiting-confirmation에서
+    approve/reject로 done이 되는 경로도 자연히 포함된다.
+
+    단, 턴이 끝났을 때 "파일 연결 제안"이 떠 있으면 바로 보내지 않고
+    사용자가 그 제안(Link file / Not now)을 해소할 때까지 기다린다 —
+    대기 중 말이 사용자가 보지도 못한 카드를 지워버리는 일을 막는다.
+  */
+  const queuedSubmitRef = useRef(null)
+  useEffect(() => {
+    const pending = state.pendingSubmit
+    if (!pending) {
+      queuedSubmitRef.current = null
+      return
+    }
+    const busy =
+      state.status === RUNTIME_STATUS.THINKING ||
+      state.status === RUNTIME_STATUS.TOOL_RUNNING ||
+      state.status === RUNTIME_STATUS.AWAITING_CONFIRMATION
+    if (busy) {
+      queuedSubmitRef.current = state.status
+      return
+    }
+    if (selectLinkAffordance(state)) {
+      // 링크 제안이 해소되면 상태가 바뀌고 이 effect가 다시 평가된다.
+      return
+    }
+    // queuedSubmitRef 가드: 같은 done 상태에서 effect가 재평가되어도
+    // 한 번만 보낸다.
+    if (queuedSubmitRef.current === null) return
+    queuedSubmitRef.current = null
+    dispatch({ type: RUNTIME_EVENT.QUEUE_SHIFT })
+    void submit(pending.text, state.projectId, {
+      activeFile: pending.activeFile || undefined,
+    })
+  }, [state, submit])
+
   return {
     status: state.status,
     text: state.text,
@@ -657,15 +798,22 @@ export default function useJarvisRuntime() {
     scratch: state.scratch,
     timeline: state.timeline,
     resumeBriefing: state.resumeBriefing,
+    // UX Continuity — 자동 브리핑 + 대기 중 요청.
+    autoBriefing: state.autoBriefing,
+    autoBriefingState: state.autoBriefingState,
+    autoBriefingError: state.autoBriefingError,
+    pendingSubmit: state.pendingSubmit,
     taskStateRevision: state.taskStateRevision,
     // Milestone B — 파생 표시 신호(영속 엔티티 아님).
     linkAffordance: selectLinkAffordance(state),
     linkState: state.linkState,
     submit,
+    submitOrQueue,
     approve,
     reject,
     dismiss,
     dismissBriefing,
+    loadAutoBriefing,
     linkActiveFile,
     dismissLinkAffordance,
   }

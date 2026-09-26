@@ -800,6 +800,10 @@ function App() {
     !isPip &&
     phase === PHASE.IDLE
 
+  /* Main keeps a compact, labelled Core; PiP owns its single presence orb.
+     The shared Core is retained during native window transitions. */
+  const showCore = !isPip || phase !== PHASE.IDLE
+
   // V4: the assistant is the only primary fullscreen surface.
   // Context opens as an optional secondary drawer instead of a mode choice.
   const showCommandCenter =
@@ -807,7 +811,25 @@ function App() {
 
   const showTreePrototype =
     showAssistantSurface &&
-    contextOpen
+    (contextOpen || Boolean(fileEditor))
+
+  /*
+    UX Continuity — 첫 열림 곧 브리핑.
+    Assistant가 처음 보이는 순간 브리지 read-only 경로로 마지막 브리핑을
+    읽어 온다(모델 호출 없음). "계속하자"를 말해야 브리핑이 나오는
+    구조를 없앤다. Assistant surface에 도달했을 때 한 번만 시도한다.
+    (showAssistantSurface 선언 뒤에 둔다 — effect에서 이 변수를 읽는다.)
+  */
+  const {
+    loadAutoBriefing,
+    autoBriefingState,
+  } = runtime
+
+  useEffect(() => {
+    if (!showAssistantSurface) return
+    if (autoBriefingState !== 'idle') return
+    loadAutoBriefing()
+  }, [showAssistantSurface, autoBriefingState, loadAutoBriefing])
 
   return (
     <main
@@ -823,6 +845,7 @@ function App() {
       data-view={view}
       data-phase={phase}
       data-context-open={contextOpen ? 'true' : 'false'}
+      data-file-open={fileEditor ? 'true' : 'false'}
       style={{
         '--pip-offset-x':
           `${pipOffset.x}px`,
@@ -840,14 +863,18 @@ function App() {
           onCloseActiveFile={() => setFileEditor(null)}
           onStartTask={handleStartTask}
           onLinkFileToFocus={handleLinkFileToFocus}
+          activeProjectTitle={
+            runtime.autoBriefing?.project?.title ||
+            runtime.resumeBriefing?.project?.title ||
+            null
+          }
           contextOpen={contextOpen}
           onToggleContext={() => setContextOpen((open) => !open)}
-          onReturnToPip={returnToPip}
         />
       )}
 
       {showTreePrototype && (
-        <aside className="v4-context-drawer" aria-label="JARVIS context">
+        <aside className="v4-context-drawer" aria-label="JARVIS context" style={!contextOpen ? { display: 'none' } : undefined}>
           <TreePrototype
             runtime={runtime}
             executionContext={executionContext}
@@ -865,27 +892,32 @@ function App() {
       )}
 
       <div className="pip-interaction-zone">
-        <section
-          className="core-container"
-          aria-label="JARVIS Core"
-        >
-          <CoreGraphic
-            onActivate={
-              handleCoreClick
-            }
-            ariaLabel={
-              isPip
-                ? 'Open JARVIS Command Center'
-                : 'Return JARVIS to PiP'
-            }
-          />
+        {showCore && (
+          <section
+            className="core-container"
+            aria-label="JARVIS Core"
+          >
+            <CoreGraphic
+              onActivate={
+                handleCoreClick
+              }
+              ariaLabel={
+                isPip
+                  ? 'Open JARVIS Command Center'
+                  : 'Return JARVIS to PiP'
+              }
+            />
 
-          {showLabel && (
-            <p className="core-label">
-              JARVIS
-            </p>
-          )}
-        </section>
+
+            {showLabel && (
+              <p className="core-label">
+                JARVIS
+              </p>
+            )}
+          </section>
+        )}
+
+        {!isPip && <span className="jarvis-core-hint">작은 창으로 · PiP</span>}
 
         {/* PiP is a compact presence surface over the shared runtime. */}
         <QuickPip

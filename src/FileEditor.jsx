@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 const EDITABLE_EXTENSIONS = new Set([
   'md', 'txt', 'py', 'js', 'jsx', 'ts', 'tsx', 'json', 'yaml', 'yml', 'html', 'css',
@@ -85,7 +86,7 @@ export default function FileEditor({ file, readFile, writeFile, onClose }) {
 
   if (!file) return null
 
-  return (
+  return createPortal(
     <section className="workspace-file-editor" aria-label={`Edit ${file.label}`}>
       <header className="workspace-file-editor-header">
         <div>
@@ -121,6 +122,7 @@ export default function FileEditor({ file, readFile, writeFile, onClose }) {
           {message && (state === 'conflict' || state === 'error') && <div className="workspace-file-editor-error" role="alert">{message}</div>}
         </>
       )}
-    </section>
+    </section>,
+    document.body,
   )
 }
