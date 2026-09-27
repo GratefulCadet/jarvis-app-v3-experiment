@@ -1161,6 +1161,9 @@ function App() {
             executionContext={executionContext}
             fileEditor={fileEditor}
             openFile={setFileEditor}
+            /* AI Edit V1 — 승인된 편집이 디스크에 반영되면 편집기가 새
+               revision과 내용을 다시 읽도록 신호를 넘긴다. */
+            fileRefreshToken={runtime.fileRevision}
             closeFile={() => setFileEditor(null)}
             onFocusTask={(task) => {
               if (!task?.node?.id) return

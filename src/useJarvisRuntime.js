@@ -54,12 +54,20 @@ const RUNTIME_EVENT = Object.freeze({
     UX Continuity — 자동 복귀 브리핑. 모델 도구와 같은 결정적 조립을
     read-only 브리지 경로로 직접 읽어 온다(모델 호출 없음).
   */
-  AUTO_BRIEFING: 'auto-briefing',
-  /*
-    composer continuity — 승인/실행 중에도 입력을 받아 순서대로 처리한다.
+  AUTO_BRIEFING: 'auto-briefing',  /* composer continuity — 승인/실행 중에도 입력을 받아 순서대로 처리한다.
   */
   QUEUE_SUBMIT: 'queue-submit',
   QUEUE_SHIFT: 'queue-shift',
+  /* AI Edit V1 — diff 제안 카드와 그 결과(적용/되돌리기/충돌).
+     모델은 제안만 만든다. 적용은 사용자가 [Apply changes]를 누를 때만
+     일어니며, 이 상태 머신이 승인 게이트다. */
+  EDIT_PROPOSAL: 'edit-proposal',
+  EDIT_APPLY: 'edit-apply',
+  EDIT_APPLIED: 'edit-applied',
+  EDIT_UNDONE: 'edit-undone',
+  EDIT_CONFLICT: 'edit-conflict',
+  EDIT_CANCELLED: 'edit-cancelled',
+  EDIT_DISMISS: 'edit-dismiss',
 })
 
 const createInitialRuntime = () => ({
@@ -115,6 +123,25 @@ const createInitialRuntime = () => ({
   */
   submittedActiveFile: null,
   createdTask: null,
+  /*
+    AI Edit V1 — 편집 제안 카드 상태.
+
+    proposal: {proposal_id, relative_path, absolute_path, summary, diff, stats,
+               base_revision, status, file_id, root_id}
+    status:   'proposed'  → diff 표시, [Apply changes] [Cancel] 대기
+              'applying'  → 적용 진행 중
+              'applied'   → 디스크 반영됨, [Undo] 제공
+              'conflict'  → revision 불일치. 재적용 금지. [Recalculate] [Cancel]
+              'cancelled' → 승인 전 취소. 디스크 불변
+              'undone'    → 되돌리기 완료
+
+    fileRevision은 단조 카운터다. 값이 아니라 "증가"가 신호라 같은 값으로
+    다시 렌더링되어도 FileEditor가 effect를 다시 돌게 한다.
+  */
+  editProposal: null,
+  editStatus: null,
+  editError: null,
+  fileRevision: 0,
   linkState: {
     status: 'idle',
     error: null,
@@ -233,6 +260,21 @@ const eventsToTimeline = (events = []) => {
   return entries
 }
 
+/*
+  AI Edit V1 — 최종 응답/확인 응답에 실려 온 편집 제안을 꺼낸다.
+  trace events 안에 edit_file 결과로 들어 있다. renderer가 trace를 직접
+  파싱하지 않도록 bridge가 최상위로 올려 준 proposal을 우선 사용한다.
+*/
+const extractEditProposal = (proposal, events = []) => {
+  if (proposal && proposal.proposal_id) return proposal
+  for (const event of events) {
+    if (event?.kind !== 'tool' || event?.name !== 'edit_file' || !event?.ok) continue
+    const candidate = event.data?.proposal
+    if (candidate?.proposal_id) return candidate
+  }
+  return null
+}
+
 const runtimeReducer = (state, event) => {
   switch (event.type) {
     case RUNTIME_EVENT.SUBMIT: {
@@ -340,11 +382,79 @@ const runtimeReducer = (state, event) => {
         // Milestone B — 실제로 생성된 task가 있으면 id를 기억한다(파생 신호).
         createdTask: createdTaskFromEvents(event.events),
       }
+      // AI Edit V1 — 제안이 실려 왔다면 diff 카드를 띄운다. 승인 전까지
+      // 디스크는 그대로이고, 새 턴의 제안이 이전 제안을 대체한다.
+      const proposal = extractEditProposal(event.proposal, event.events)
+      if (proposal) {
+        base.editProposal = proposal
+        base.editStatus = 'proposed'
+        base.editError = null
+      }
       const toolEntries = eventsToTimeline(event.events)
       let next = base
       for (const entry of toolEntries) next = pushTimeline(next, entry)
       return pushTimeline(next, { kind: 'qwen', label: 'QWEN FINAL', detail: event.text || '' })
     }
+
+    /* AI Edit V1 — 편집 제안 lifecycle. 상태 전이는 아래 액션만 허용한다. */
+    case RUNTIME_EVENT.EDIT_PROPOSAL:
+      return {
+        ...state,
+        editProposal: event.proposal,
+        editStatus: 'proposed',
+        editError: null,
+      }
+
+    case RUNTIME_EVENT.EDIT_APPLY:
+      return {
+        ...state,
+        editStatus: 'applying',
+        editError: null,
+      }
+
+    case RUNTIME_EVENT.EDIT_APPLIED:
+      return {
+        ...state,
+        // 되돌리기에 필요한 식별자는 유지한다. revision만 새로고침 신호로 쓴다.
+        editProposal: { ...(state.editProposal || {}), ...(event.proposal || {}) },
+        editStatus: 'applied',
+        editError: null,
+        // 편집기가 다시 읽도록 신호를 올린다 (같은 값으로 렌더링되지 않게 단조 증가).
+        fileRevision: state.fileRevision + 1,
+      }
+
+    case RUNTIME_EVENT.EDIT_UNDONE:
+      return {
+        ...state,
+        editProposal: { ...(state.editProposal || {}), status: 'undone' },
+        // 되돌린 뒤에는 같은 제안을 다시 적용할 수 없다(1단계 undo).
+        editStatus: 'undone',
+        editError: null,
+        fileRevision: state.fileRevision + 1,
+      }
+
+    case RUNTIME_EVENT.EDIT_CONFLICT:
+      return {
+        ...state,
+        editStatus: 'conflict',
+        editError: event.error || '이 파일이 변경되었습니다.',
+      }
+
+    case RUNTIME_EVENT.EDIT_CANCELLED:
+      return {
+        ...state,
+        editProposal: { ...(state.editProposal || {}), ...(event.proposal || {}) },
+        editStatus: 'cancelled',
+        editError: null,
+      }
+
+    case RUNTIME_EVENT.EDIT_DISMISS:
+      return {
+        ...state,
+        editProposal: null,
+        editStatus: null,
+        editError: null,
+      }
 
     case RUNTIME_EVENT.APPROVE:
       return {
@@ -869,6 +979,83 @@ export default function useJarvisRuntime() {
     })
   }, [state, submit])
 
+  /*
+    AI Edit V1 — diff 승인/취소/되돌리기.
+
+    세 동작 모두 사용자의 명시적 클릭에서만 시작된다. revision 불일치
+    (status='conflict')를 성공으로 취급하지 않는다 — 파일은 이미 보호되어 있고,
+    UI는 재계산/취소만 허용한다.
+  */
+  const applyEdit = useCallback(async () => {
+    const api = window.jarvisDiscovery
+    const proposal = stateRef.current.editProposal
+    if (!api?.editApply || !proposal?.proposal_id) return
+    if (!['proposed', 'conflict'].includes(stateRef.current.editStatus)) return
+
+    dispatch({ type: RUNTIME_EVENT.EDIT_APPLY })
+    const response = await api.editApply(proposal.proposal_id)
+
+    if (response?.status === 'ok') {
+      // bridge는 제안 payload를 `proposal` 아래에 넣는다(봉투 status와 충돌하지 않도록).
+      dispatch({
+        type: RUNTIME_EVENT.EDIT_APPLIED,
+        proposal: response.proposal || { status: 'applied' },
+      })
+      return
+    }
+    if (response?.status === 'conflict') {
+      dispatch({ type: RUNTIME_EVENT.EDIT_CONFLICT, error: response.error })
+      return
+    }
+    dispatch({
+      type: RUNTIME_EVENT.EDIT_CONFLICT,
+      error: response?.error || '편집을 적용할 수 없습니다.',
+    })
+  }, [])
+
+  const cancelEdit = useCallback(async () => {
+    const api = window.jarvisDiscovery
+    const proposal = stateRef.current.editProposal
+    if (!proposal?.proposal_id) return
+    if (stateRef.current.editStatus === 'applied') return
+
+    // 취소는 순수 상태 정리이며 디스크는 이미 건드리지 않았다. 브리지가 없어도
+    // UI에서는 즉시 사라져야 하므로 결과를 기다리지 않고 먼저 비운다.
+    dispatch({ type: RUNTIME_EVENT.EDIT_CANCELLED, proposal: { status: 'cancelled' } })
+    try {
+      if (api?.editCancel) await api.editCancel(proposal.proposal_id)
+    } catch {
+      // 제안 기록 정리는 부수효과다 — 취소 자체는 이미 UI에 반영됐다.
+    }
+  }, [])
+
+  const undoEdit = useCallback(async () => {
+    const api = window.jarvisDiscovery
+    const proposal = stateRef.current.editProposal
+    if (!api?.editUndo || !proposal?.proposal_id) return
+    if (stateRef.current.editStatus !== 'applied') return
+
+    dispatch({ type: RUNTIME_EVENT.EDIT_APPLY })
+    const response = await api.editUndo(proposal.proposal_id)
+
+    if (response?.status === 'ok') {
+      dispatch({ type: RUNTIME_EVENT.EDIT_UNDONE })
+      return
+    }
+    if (response?.status === 'conflict') {
+      dispatch({ type: RUNTIME_EVENT.EDIT_CONFLICT, error: response.error })
+      return
+    }
+    dispatch({
+      type: RUNTIME_EVENT.EDIT_CONFLICT,
+      error: response?.error || '되돌릴 수 없습니다.',
+    })
+  }, [])
+
+  const dismissEdit = useCallback(() => {
+    dispatch({ type: RUNTIME_EVENT.EDIT_DISMISS })
+  }, [])
+
   return {
     status: state.status,
     text: state.text,
@@ -891,6 +1078,15 @@ export default function useJarvisRuntime() {
     linkState: state.linkState,
     // UX 통합 — 승인 화면에서 '이 파일도 연결' 오퍼를 위한 요청 당시 파일.
     submittedActiveFile: state.submittedActiveFile,
+    // AI Edit V1 — 편집 제안 카드 상태 + 편집기 새로고침 신호.
+    editProposal: state.editProposal,
+    editStatus: state.editStatus,
+    editError: state.editError,
+    fileRevision: state.fileRevision,
+    applyEdit,
+    cancelEdit,
+    undoEdit,
+    dismissEdit,
     submit,
     submitOrQueue,
     approve,

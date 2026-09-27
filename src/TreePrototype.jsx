@@ -335,6 +335,7 @@ export default function TreePrototype({
   runtime,
   fileEditor,
   openFile: setFileEditor,
+  fileRefreshToken,
   closeFile,
 }) {
   const taskTree =
@@ -2120,6 +2121,7 @@ export default function TreePrototype({
           readFile={files.readFile}
           writeFile={files.writeFile}
           onClose={closeFile}
+          refreshToken={fileRefreshToken}
         />
       )}
 

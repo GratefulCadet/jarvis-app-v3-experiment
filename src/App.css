@@ -8748,6 +8748,138 @@
   background: rgba(255, 255, 255, 0.12);
 }
 
+/*
+  AI Edit V1 — 편집 제안 diff 카드.
+
+  설계 원칙: 승인 전 사용자가 "무엇이 없어지고 무엇이 생기는가"를 오해 없이
+  보게 한다. 그래서 +/- 는 색 대신 기호와 배경 강도로 구분해 흑백 단독에서도
+  읽히게 하고, 줄 높이는 촘촘하게 유지해 긴 diff도 카드 안에서 읽힌다.
+*/
+.jarvis-edit-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.jarvis-edit-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.jarvis-edit-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--jarvis-text-strong);
+  word-break: break-all;
+}
+
+.jarvis-edit-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.jarvis-edit-stat.is-removed { color: rgba(255, 140, 140, 0.95); }
+.jarvis-edit-stat.is-added { color: rgba(140, 230, 170, 0.95); }
+.jarvis-edit-stat.is-total { color: rgba(255, 255, 255, 0.6); }
+
+.jarvis-edit-path {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  word-break: break-all;
+}
+
+.jarvis-edit-summary {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.jarvis-edit-diff {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 260px;
+  overflow: auto;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: pre;
+}
+
+.jarvis-diff-line {
+  display: block;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.jarvis-diff-line.is-add {
+  background: rgba(70, 190, 120, 0.18);
+  color: rgba(180, 245, 205, 1);
+}
+
+.jarvis-diff-line.is-remove {
+  background: rgba(210, 80, 80, 0.18);
+  color: rgba(250, 190, 190, 1);
+}
+
+.jarvis-diff-line.is-hunk,
+.jarvis-diff-line.is-meta {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.jarvis-edit-conflict {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(255, 170, 90, 0.5);
+  border-radius: 8px;
+  background: rgba(255, 170, 90, 0.1);
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 220, 180, 1);
+}
+
+.jarvis-edit-note {
+  margin: 0;
+  font-size: 11px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.jarvis-edit-note.is-applied {
+  font-style: normal;
+  color: rgba(140, 230, 170, 0.95);
+}
+
+.jarvis-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.jarvis-edit-card.is-cancelled {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.pip-mode .pip-presence > .jarvis-edit-card .jarvis-edit-actions button { min-height: 34px; }
+.pip-mode .pip-presence > .jarvis-edit-card .jarvis-edit-diff { max-height: 140px; }
+
 .jarvis-runtime-text {
   font-size: 15px;
   line-height: 1.5;

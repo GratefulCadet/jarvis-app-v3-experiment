@@ -119,6 +119,152 @@ function LinkAffordance({ runtime, compact = false }) {
   )
 }
 
+/*
+  AI Edit V1 — 편집 제안 diff 카드.
+
+  V1의 목표는 완벽한 code-review UI가 아니라 "무엇이 없어지고 무엇이 생기는가"를
+  명확히 보이주는 것이다. 그래서 hunk 헤더와 +/- 줄만 접히지 않은 상태로 보여주고
+  (added/removed 수로 "N lines changed"를 대체하지 않고 함께 알린다), [Apply changes]
+  전까지는 디스크가 그대로임을 문장으로 못 박는다.
+
+  상태별:
+    proposed  → diff + [Apply changes] [Cancel]
+    applying  → 적용 중 (버튼 비활성)
+    applied   → 반영됨 + [Undo]
+    conflict  → revision 불일치. 재적용 금지. [Recalculate] [Cancel]
+    cancelled → 취소됨 (디스크 불변)
+*/
+function EditDiffCard({ runtime }) {
+  const proposal = runtime.editProposal
+  const status = runtime.editStatus
+  if (!proposal) return null
+
+  const diff = Array.isArray(proposal.diff) ? proposal.diff : []
+  const stats = proposal.stats || { added: 0, removed: 0, changed: 0 }
+  const busy = status === 'applying'
+
+  if (status === 'cancelled') {
+    return (
+      <div className="jarvis-edit-card is-cancelled" role="status">
+        <div className="jarvis-edit-head">Edit cancelled</div>
+        <p className="jarvis-edit-note">
+          {proposal.name || proposal.relative_path}은(는) 수정되지 않았습니다.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="jarvis-edit-card" role="group" aria-label="Proposed edit">
+      <div className="jarvis-edit-head">
+        <div className="jarvis-edit-title">{proposal.name || proposal.relative_path}</div>
+        <div className="jarvis-edit-stats" aria-label="Change size">
+          <span className="jarvis-edit-stat is-removed">−{stats.removed}</span>
+          <span className="jarvis-edit-stat is-added">+{stats.added}</span>
+          <span className="jarvis-edit-stat is-total">
+            {stats.changed} line{stats.changed === 1 ? '' : 's'} changed
+          </span>
+        </div>
+      </div>
+
+      {proposal.absolute_path && (
+        <code className="jarvis-edit-path" title={proposal.absolute_path}>
+          {proposal.absolute_path}
+        </code>
+      )}
+      {proposal.summary && (
+        <p className="jarvis-edit-summary">{proposal.summary}</p>
+      )}
+
+      {status === 'conflict' ? (
+        <div className="jarvis-edit-conflict" role="alert">
+          <strong>This file changed after the edit was proposed.</strong>
+          <span>{runtime.editError}</span>
+        </div>
+      ) : (
+        <pre className="jarvis-edit-diff" aria-label="Proposed changes">
+          {diff.map((line, index) => {
+            const kind = line.startsWith('+++') || line.startsWith('---')
+              ? 'meta'
+              : line.startsWith('+')
+                ? 'add'
+                : line.startsWith('-')
+                  ? 'remove'
+                  : line.startsWith('@@')
+                    ? 'hunk'
+                    : 'context'
+            return (
+              <span key={index} className={`jarvis-diff-line is-${kind}`}>
+                {line || ' '}
+              </span>
+            )
+          })}
+        </pre>
+      )}
+
+      {status !== 'applied' && (
+        <p className="jarvis-edit-note">
+          Nothing has changed on disk yet.
+        </p>
+      )}
+      {status === 'applied' && (
+        <p className="jarvis-edit-note is-applied">
+          Saved. {proposal.name || proposal.relative_path} was updated.
+        </p>
+      )}
+      {status === 'undone' && (
+        <p className="jarvis-edit-note is-applied">
+          Reverted. {proposal.name || proposal.relative_path} is back to its previous content.
+        </p>
+      )}
+
+      <div className="jarvis-edit-actions">
+        {status === 'undone' ? (
+          <button
+            type="button"
+            className="jarvis-reject-button"
+            onClick={runtime.dismissEdit}
+          >
+            Close
+          </button>
+        ) : status === 'applied' ? (
+          <button
+            type="button"
+            className="jarvis-approve-button"
+            onClick={runtime.undoEdit}
+            disabled={busy}
+          >
+            {busy ? 'Undoing…' : 'Undo'}
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="jarvis-approve-button"
+              onClick={status === 'conflict' ? runtime.dismissEdit : runtime.applyEdit}
+              disabled={busy}
+            >
+              {status === 'conflict'
+                ? 'Recalculate'
+                : busy
+                  ? 'Applying…'
+                  : 'Apply changes'}
+            </button>
+            <button
+              type="button"
+              className="jarvis-reject-button"
+              onClick={runtime.cancelEdit}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function JarvisRuntimePanel({
   runtime,
   onApprove,
@@ -169,6 +315,15 @@ export default function JarvisRuntimePanel({
   }
 
   if (status === RUNTIME_STATUS.IDLE) {
+    // AI Edit V1 — 이미 적용/되돌린 뒤 대화가 idle로 돌아와도 Undo affordance는
+    // 사라지면 안 된다. 사용자가 제안 결과(취소/충돌 포함)를 계속 볼 수 있어야 한다.
+    if (runtime.editStatus && runtime.editStatus !== 'cancelled') {
+      return (
+        <div className="jarvis-runtime-panel is-done" aria-live="polite">
+          <EditDiffCard runtime={runtime} />
+        </div>
+      )
+    }
     return children
   }
 
@@ -311,11 +466,22 @@ export default function JarvisRuntimePanel({
       if (hideDone || !pipMode) {
         return children
       }
+      /*
+        AI Edit V1 — PiP에서도 편집 제안을 보여준다.
+
+        이 파일의 설계 원칙은 "PiP와 Command Center가 같은 runtime state를 같은
+        방식으로 그린다"다. quiet 분기가 이 카드를 빠뜨리면 승인 직후 surface가
+        PiP로 넘어가는 순간 Undo affordance가 사라진다 — 되돌리기가 필요한 바로
+        그 순간에 제공자가 사라지는 것은 milestone이 가장 먼저 막으려던 UX다.
+        카드는 다른 surface와 같은 상태 머신에서 나오므로 중복 상태가 아니다.
+      */
       if (variant === 'quiet') {
         return (
           <div className="jarvis-runtime-panel is-done is-quiet pip-presence-resume" role="status" aria-live="polite">
             <div className="jarvis-runtime-heading"><span className="jarvis-runtime-status-text">Done</span></div>
             <div className="jarvis-runtime-quiet-note">{text ? `${text.length > 90 ? `${text.slice(0, 90)}…` : text}` : '요청을 처리했습니다.'}</div>
+            {/* AI Edit V1 — PiP에서도 편집 제안을 보여준다(아래 주석 참고). */}
+            <EditDiffCard runtime={runtime} />
             <div className="jarvis-runtime-quiet-hint">Core/Orb를 눌러 Main에서 전체 응답 보기</div>
           </div>
         )
@@ -371,6 +537,9 @@ export default function JarvisRuntimePanel({
         <div className="jarvis-runtime-text">
           {text || '완료했습니다.'}
         </div>
+
+        {/* AI Edit V1 — 모델 답변 아래에 diff 카드. 승인 게이트가 여기다. */}
+        <EditDiffCard runtime={runtime} />
 
         <LinkAffordance runtime={runtime} />
 

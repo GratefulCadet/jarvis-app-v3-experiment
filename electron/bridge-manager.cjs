@@ -243,6 +243,20 @@ class BridgeManager {
     })
   }
 
+  /* AI EDIT V1 — 승인된 편집 적용/되돌리기/취소. renderer 클릭 전용 경로. */
+
+  async editApply(proposalId) {
+    return this._call({ type: 'edit_apply', proposal_id: proposalId })
+  }
+
+  async editUndo(proposalId) {
+    return this._call({ type: 'edit_undo', proposal_id: proposalId })
+  }
+
+  async editCancel(proposalId) {
+    return this._call({ type: 'edit_cancel', proposal_id: proposalId })
+  }
+
   async linkProjectFile(projectId, fileId, relation) {
     return this._call({ type: 'link_project_file', project_id: projectId, file_id: fileId, relation })
   }

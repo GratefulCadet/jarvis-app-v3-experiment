@@ -258,6 +258,26 @@ function registerBridgeIpc({ ipcMain, app }) {
     return manager.fileCreate(rootId, relativePath, content)
   })
 
+  /* AI EDIT V1 — revision-safe apply / undo / cancel.
+     승인 게이트는 UI다: renderer가 [Apply changes]를 누를 때만 여기까지 온다. */
+  ipcMain.handle('jarvis:edit-apply', async (_event, payload) => {
+    const proposalId = _field(payload, 'proposalId', 'proposal_id')
+    if (!proposalId) return _err('proposal_id가 필요합니다')
+    return manager.editApply(proposalId)
+  })
+
+  ipcMain.handle('jarvis:edit-undo', async (_event, payload) => {
+    const proposalId = _field(payload, 'proposalId', 'proposal_id')
+    if (!proposalId) return _err('proposal_id가 필요합니다')
+    return manager.editUndo(proposalId)
+  })
+
+  ipcMain.handle('jarvis:edit-cancel', async (_event, payload) => {
+    const proposalId = _field(payload, 'proposalId', 'proposal_id')
+    if (!proposalId) return _err('proposal_id가 필요합니다')
+    return manager.editCancel(proposalId)
+  })
+
   ipcMain.handle('jarvis:link-project-file', async (_event, payload) => {
     const projectId = payload?.projectId
     const fileId = payload?.fileId

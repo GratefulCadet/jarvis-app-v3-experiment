@@ -195,6 +195,22 @@ contextBridge.exposeInMainWorld(
       })
     },
 
+    /* AI EDIT V1 — diff 승인/취소와 1단계 되돌리기.
+
+       이 셋은 renderer가 "사용자가 클릭했다"는 사실로만 호출한다. 모델에는
+       열려 있지 않다 — 디스크 쓰기는 오직 explic적 승인 경로로 일어난다. */
+    editApply: (proposalId) => {
+      return ipcRenderer.invoke('jarvis:edit-apply', { proposalId })
+    },
+
+    editUndo: (proposalId) => {
+      return ipcRenderer.invoke('jarvis:edit-undo', { proposalId })
+    },
+
+    editCancel: (proposalId) => {
+      return ipcRenderer.invoke('jarvis:edit-cancel', { proposalId })
+    },
+
     /* RESOURCE LINK V1 — Project↔FileRef semantic links.
        linkProjectFile: direct user action → deterministic canonical write.
        file_id는 FileRef identity(f-*)만 — 경로는 bridge가 하드 거부한다. */

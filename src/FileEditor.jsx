@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 const EDITABLE_EXTENSIONS = new Set([
@@ -7,7 +7,7 @@ const EDITABLE_EXTENSIONS = new Set([
 
 const extensionOf = (name) => name.split('.').pop()?.toLowerCase() || ''
 
-export default function FileEditor({ file, readFile, writeFile, onClose, workspaceRoot, fileLocation }) {
+export default function FileEditor({ file, readFile, writeFile, onClose, workspaceRoot, fileLocation, refreshToken }) {
   const [content, setContent] = useState('')
   const [revision, setRevision] = useState(null)
   const [state, setState] = useState('loading')
@@ -39,6 +39,36 @@ export default function FileEditor({ file, readFile, writeFile, onClose, workspa
     // The selected FileRef is the identity boundary for this editor.
     return () => window.clearTimeout(timer)
   }, [editable, file, load])
+
+  /*
+    AI Edit V1 — 외부 승인 적용 후 편집기 새로고침.
+
+    JARVIS가 승인된 편집을 디스크에 반영하면 이 편집기는 자신이 들고 있던
+    이전 revision을 계속 갖고 있다. 저장하려 하면 충돌로 거절당하고, 사용자는
+    "내용이 사라졌다"고 오해한다. 그래서 단조 증가 신호(refreshToken)가 올라오면
+    새 revision과 내용을 다시 읽는다.
+
+    두 가지가 중요하다:
+    1) state를 dependency에 넣지 않는다. load()가 state를 바꾸므로 effect가
+       다시 돌며 load()를 부르고… 무한 반복이 되고 편집기가 비어 보인다.
+       현재 state는 ref로 읽는다(읽기만, 구독 안 함).
+    2) 사용자가 편집 중이면(dirty) 건드리지 않는다 — 자동 갱신이 작성 중인
+       내용을 지우는 것이 conflict보다 나은 답은 아니다.
+  */
+  const stateRef = useRef(state)
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
+
+  useEffect(() => {
+    if (!refreshToken || !file || !editable) return undefined
+    if (stateRef.current === 'dirty' || stateRef.current === 'saving') return undefined
+
+    const timer = window.setTimeout(() => {
+      void load()
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [editable, file, load, refreshToken])
 
   const dirty = state === 'dirty' || state === 'saving'
   const save = useCallback(async () => {
