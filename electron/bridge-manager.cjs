@@ -253,6 +253,10 @@ class BridgeManager {
     return this._call({ type: 'edit_undo', proposal_id: proposalId })
   }
 
+  async editRecalculate(proposalId) {
+    return this._call({ type: 'edit_recalculate', proposal_id: proposalId })
+  }
+
   async editCancel(proposalId) {
     return this._call({ type: 'edit_cancel', proposal_id: proposalId })
   }

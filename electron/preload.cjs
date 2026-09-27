@@ -211,6 +211,12 @@ contextBridge.exposeInMainWorld(
       return ipcRenderer.invoke('jarvis:edit-cancel', { proposalId })
     },
 
+    /* V1.1 — 충돌 후 '다시 계산'. 예전 제안을 재적용하지 않고 같은 원래
+       요청으로 현재 revision에 대한 새 제안을 만든다. */
+    editRecalculate: (proposalId) => {
+      return ipcRenderer.invoke('jarvis:edit-recalculate', { proposalId })
+    },
+
     /* RESOURCE LINK V1 — Project↔FileRef semantic links.
        linkProjectFile: direct user action → deterministic canonical write.
        file_id는 FileRef identity(f-*)만 — 경로는 bridge가 하드 거부한다. */

@@ -7,6 +7,25 @@ const EDITABLE_EXTENSIONS = new Set([
 
 const extensionOf = (name) => name.split('.').pop()?.toLowerCase() || ''
 
+/*
+  Footer 표시는 state의 실제 값을 따른다.
+
+  이전에는 dirty/saving/conflict만 따로 치환하고 나머지를 `message || 'Clean'`
+  으로 떨어뜨렸다. 그래서 AI Edit 승인 후 자동 갱신 중에 state가 'loading'인데도
+  화면에는 'Clean'이 떴다 — 갱신이 실패한 것처럼 보이거나, 반대로 "내용이
+  조용히 바뀌는 중"이라는 사실이 숨겨진다. 편집 동작은 그대로 두고 표기만
+  실제 state와 맞춘다(오류/저장완료 문구는 message가 우선한다).
+*/
+const STATE_LABELS = {
+  loading: 'Loading…',
+  clean: 'Clean',
+  dirty: 'Unsaved changes',
+  saving: 'Saving…',
+  saved: 'Saved',
+  conflict: 'Conflict',
+  error: 'Error',
+}
+
 export default function FileEditor({ file, readFile, writeFile, onClose, workspaceRoot, fileLocation, refreshToken }) {
   const [content, setContent] = useState('')
   const [revision, setRevision] = useState(null)
@@ -148,7 +167,9 @@ export default function FileEditor({ file, readFile, writeFile, onClose, workspa
           />
           <footer className="workspace-file-editor-footer">
             <span className={`workspace-file-editor-state is-${state}`}>
-              {state === 'dirty' ? 'Edited' : state === 'saving' ? 'Saving…' : state === 'conflict' ? 'Conflict' : message || 'Clean'}
+              {(state === 'saved' || state === 'error') && message
+                ? message
+                : STATE_LABELS[state] || state}
             </span>
             <div>
               {(state === 'conflict' || state === 'error') && <button type="button" onClick={load}>Reload</button>}

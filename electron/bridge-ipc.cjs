@@ -272,6 +272,12 @@ function registerBridgeIpc({ ipcMain, app }) {
     return manager.editUndo(proposalId)
   })
 
+  ipcMain.handle('jarvis:edit-recalculate', async (_event, payload) => {
+    const proposalId = _field(payload, 'proposalId', 'proposal_id')
+    if (!proposalId) return _err('proposal_id가 필요합니다')
+    return manager.editRecalculate(proposalId)
+  })
+
   ipcMain.handle('jarvis:edit-cancel', async (_event, payload) => {
     const proposalId = _field(payload, 'proposalId', 'proposal_id')
     if (!proposalId) return _err('proposal_id가 필요합니다')

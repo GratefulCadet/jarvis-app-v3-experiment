@@ -65,6 +65,7 @@ const RUNTIME_EVENT = Object.freeze({
   EDIT_APPLY: 'edit-apply',
   EDIT_APPLIED: 'edit-applied',
   EDIT_UNDONE: 'edit-undone',
+  EDIT_RECALCULATING: 'edit-recalculating',
   EDIT_CONFLICT: 'edit-conflict',
   EDIT_CANCELLED: 'edit-cancelled',
   EDIT_DISMISS: 'edit-dismiss',
@@ -421,6 +422,14 @@ const runtimeReducer = (state, event) => {
         editError: null,
         // 편집기가 다시 읽도록 신호를 올린다 (같은 값으로 렌더링되지 않게 단조 증가).
         fileRevision: state.fileRevision + 1,
+      }
+
+    /* V1.1 — 재계산. 새 제안으로 교체하고 이전 proposal_id를 기억한다. */
+    case RUNTIME_EVENT.EDIT_RECALCULATING:
+      return {
+        ...state,
+        editStatus: 'recalculating',
+        editError: null,
       }
 
     case RUNTIME_EVENT.EDIT_UNDONE:
@@ -1029,6 +1038,35 @@ export default function useJarvisRuntime() {
     }
   }, [])
 
+  /*
+    V1.1 — 충돌 후 다시 계산.
+
+    예전 제안을 다시 적용하지 않는다. 같은 원래 요청으로 현재 파일을 다시 읽어
+    새 제안을 만들고 받는다 — proposal_id·base_revision·diff가 모두 새로 나온다.
+  */
+  const recalculateEdit = useCallback(async () => {
+    const api = window.jarvisDiscovery
+    const proposal = stateRef.current.editProposal
+    if (!api?.editRecalculate || !proposal?.proposal_id) return
+    if (stateRef.current.editStatus !== 'conflict') return
+
+    dispatch({ type: RUNTIME_EVENT.EDIT_RECALCULATING })
+    const response = await api.editRecalculate(proposal.proposal_id)
+
+    if (response?.status === 'ok' && response.proposal?.proposal_id) {
+      dispatch({
+        type: RUNTIME_EVENT.EDIT_PROPOSAL,
+        proposal: response.proposal,
+        superseded: response.superseded || null,
+      })
+      return
+    }
+    dispatch({
+      type: RUNTIME_EVENT.EDIT_CONFLICT,
+      error: response?.error || '다시 계산하지 못했습니다.',
+    })
+  }, [])
+
   const undoEdit = useCallback(async () => {
     const api = window.jarvisDiscovery
     const proposal = stateRef.current.editProposal
@@ -1084,6 +1122,7 @@ export default function useJarvisRuntime() {
     editError: state.editError,
     fileRevision: state.fileRevision,
     applyEdit,
+    recalculateEdit,
     cancelEdit,
     undoEdit,
     dismissEdit,

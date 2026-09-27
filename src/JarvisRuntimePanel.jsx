@@ -141,7 +141,7 @@ function EditDiffCard({ runtime }) {
 
   const diff = Array.isArray(proposal.diff) ? proposal.diff : []
   const stats = proposal.stats || { added: 0, removed: 0, changed: 0 }
-  const busy = status === 'applying'
+  const busy = status === 'applying' || status === 'recalculating'
 
   if (status === 'cancelled') {
     return (
@@ -219,7 +219,11 @@ function EditDiffCard({ runtime }) {
       )}
 
       <div className="jarvis-edit-actions">
-        {status === 'undone' ? (
+        {status === 'recalculating' ? (
+          <button type="button" className="jarvis-reject-button" disabled>
+            Recalculating…
+          </button>
+        ) : status === 'undone' ? (
           <button
             type="button"
             className="jarvis-reject-button"
@@ -241,14 +245,16 @@ function EditDiffCard({ runtime }) {
             <button
               type="button"
               className="jarvis-approve-button"
-              onClick={status === 'conflict' ? runtime.dismissEdit : runtime.applyEdit}
+              onClick={status === 'conflict' ? runtime.recalculateEdit : runtime.applyEdit}
               disabled={busy}
             >
               {status === 'conflict'
                 ? 'Recalculate'
-                : busy
-                  ? 'Applying…'
-                  : 'Apply changes'}
+                : status === 'recalculating'
+                  ? 'Recalculating…'
+                  : busy
+                    ? 'Applying…'
+                    : 'Apply changes'}
             </button>
             <button
               type="button"

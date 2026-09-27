@@ -24,6 +24,8 @@ const HARNESS_HOME =
   path.join(os.homedir(), 'Desktop', 'FB_Soap_LocalLLM')
 const ARTIFACT_DIR = path.join(__dirname, 'artifacts', 'ai-edit-v1')
 const FILE_NAME = 'experiment-notes.md'
+// 재계산이 만들어내는 '짧게 줄인' 결과 (CRLF — 대상 파일 규약 유지).
+const RECALC_CONTENT = '# Experiment notes\r\n\r\n짧게 줄인 결론.\r\n'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -75,7 +77,7 @@ async function waitForHttp(url, timeoutMs) {
   received에는 스텁이 실제로 본 system/user 메시지를 남겨 E6 단언에 쓴다.
 */
 function startStubModel({ newContentByFile, marker }) {
-  const received = { activeFileLines: [], userTexts: [], toolNames: [], created: false }
+  const received = { activeFileLines: [], userTexts: [], toolNames: [], created: false, recalcPrompts: [] }
   const server = http.createServer((req, res) => {
     let body = ''
     req.on('data', (c) => { body += c })
@@ -129,8 +131,35 @@ function startStubModel({ newContentByFile, marker }) {
       const desired = newContentByFile[targetName] || newContentByFile[FILE_NAME]
       let message
 
-      if (sawRead) {
-        // read_file 결과에서 실제 file_id/root를 뽑아낸다.
+      // 재계산 프롬프트 — 대상 identity와 원래 요청을 받아 새 제안을 만든다.
+      if (text.includes('사용자 요청:') && text.includes('대상 file_id:')) {
+        const id = (text.match(/대상 file_id:\s*(\S+)/) || [])[1]
+        const root = (text.match(/대상 root:\s*(\S+)/) || [])[1]
+        const p = (text.match(/대상 path:\s*(\S+)/) || [])[1]
+        const instr = ((text.match(/사용자 요청:\s*([\s\S]*?)\n\n/) || [])[1] || '').trim()
+        received.recalcPrompts.push({ id, root, path: p, instruction: instr })
+        if (id && p) {
+          message = {
+            role: 'assistant',
+            content: '',
+            tool_calls: [{
+              function: {
+                name: 'edit_file',
+                arguments: {
+                  file_id: id,
+                  root: root,
+                  path: p,
+                  content: RECALC_CONTENT,
+                  summary: '재계산한 제안',
+                  instruction: instr,
+                },
+              },
+            }],
+          }
+        } else {
+          message = { role: 'assistant', content: '대상을 확인할 수 없습니다.' }
+        }
+      } else if (readResults.length > 0) {
         let fileId = null
         let rootId = null
         let current = ''
@@ -139,10 +168,10 @@ function startStubModel({ newContentByFile, marker }) {
           rootId = d.data.root_id
           current = d.data.content
         }
-        if (!fileId) {
-          message = { role: 'assistant', content: 'file_id를 얻지 못했습니다.' }
-        } else if (sawProposal) {
+        if (sawProposal) {
           message = { role: 'assistant', content: '변경 제안을 만들었습니다. diff를 확인하고 승인해 주세요.' }
+        } else if (!fileId) {
+          message = { role: 'assistant', content: 'file_id를 얻지 못했습니다.' }
         } else if (current === desired) {
           message = { role: 'assistant', content: '이미 반영되어 있습니다.' }
         } else {
@@ -158,6 +187,7 @@ function startStubModel({ newContentByFile, marker }) {
                   path: targetName,
                   content: desired,
                   summary: `${marker} 요청한 수정`,
+                  instruction: text,
                 },
               },
             }],
@@ -599,6 +629,127 @@ async function main() {
     await cdp.waitFor("document.querySelector('.jarvis-edit-card.is-cancelled')", '취소 카드', 20000)
     if (fs.readFileSync(targetPath, 'utf8') !== externallyChanged) fail('취소했는데 파일이 변경됨')
     ok('Cancel — 디스크 불변')
+
+    // --- V1.1: conflict recalculate ---
+    step('V1.1) Recalculate — 충돌 후 같은 요청으로 새 제안')
+    const readProposals = () => {
+      const file = path.join(stateDir, 'edit_proposals.json')
+      if (!fs.existsSync(file)) return {}
+      return JSON.parse(fs.readFileSync(file, 'utf8')).proposals || {}
+    }
+
+    // 원상복구 후 A를 Active File로 열고 P1을 만든다(시나리오: open A → 요청).
+    fs.writeFileSync(targetPath, original, 'utf8')
+    await cdp.waitFor(
+      `Array.from(document.querySelectorAll('.tree-prototype-map-row')).some((r) => (r.innerText || '').includes('${FILE_NAME}'))`,
+      'FILES 목록', 20000,
+    )
+    await cdp.realClick(
+      `Array.from(document.querySelectorAll('.tree-prototype-map-row')).find((r) => (r.innerText || '').includes('${FILE_NAME}'))`,
+      'A 열기 (Active File)',
+    )
+    await cdp.waitFor("document.querySelector('.workspace-file-editor')", 'A 편집기', 15000)
+    const v11Active = await cdp.evalJs("return document.querySelector('.workspace-file-editor-header strong')?.innerText || ''")
+    if (!v11Active.includes(FILE_NAME)) fail(`Active File 아님: ${v11Active}`)
+    await sendMessage('결론을 더 짧게 수정해줘')
+    await cdp.waitFor(EDIT_CARD, 'P1 diff 카드', 60000)
+
+    const proposalsAfterP1 = readProposals()
+    const p1Id = Object.keys(proposalsAfterP1).filter((id) => proposalsAfterP1[id].status === 'proposed').pop()
+    if (!p1Id) fail('P1 제안 레코드가 저장되지 않음')
+    const p1 = proposalsAfterP1[p1Id]
+    console.log(`  P1: ${p1Id} | base_rev=${JSON.stringify(p1.base_revision)}`)
+    console.log(`  P1 instruction: ${JSON.stringify(p1.instruction)}`)
+    if (p1.instruction !== '결론을 더 짧게 수정해줘') {
+      fail(`P1에 원래 요청이 저장되지 않음: ${JSON.stringify(p1.instruction)}`)
+    }
+    ok('P1 생성 — 원래 요청(instruction) 저장됨')
+
+    await closeEditor()
+
+    // 제안 직후 외부 변경 → Apply → conflict
+    const externalV11 = '# Experiment notes\r\n\r\nEXTERNAL V11\r\n'
+    fs.writeFileSync(targetPath, externalV11, 'utf8')
+    await cdp.realClick(APPLY_BTN, 'Apply changes (충돌 유도)')
+    await cdp.waitFor("document.querySelector('.jarvis-edit-conflict')", 'conflict 카드', 30000)
+    if (fs.readFileSync(targetPath, 'utf8') !== externalV11) fail('충돌인데 파일이 덮어써짐')
+    ok('P1 Apply 충돌 거부 — 외부 변경 그대로')
+
+    // Recalculate
+    await cdp.realClick(
+      "Array.from(document.querySelectorAll('.jarvis-edit-card button')).find((b) => b.textContent.trim() === 'Recalculate')",
+      'Recalculate',
+    )
+    await cdp.waitFor(EDIT_CARD, 'P2 diff 카드', 90000)
+    await sleep(800)
+
+    const proposalsAfterP2 = readProposals()
+    // P2 = P1이 아니고 P1보다 나중에 만들어진 'proposed' (이전 시나리오의 잔여 제안 제외)
+    const p2Candidates = Object.keys(proposalsAfterP2).filter(
+      (id) => id !== p1Id
+        && proposalsAfterP2[id].status === 'proposed'
+        && proposalsAfterP2[id].created_at > p1.created_at,
+    )
+    const p2Id = p2Candidates[0]
+    if (!p2Id) {
+      console.log(`  상태: ${JSON.stringify(Object.entries(proposalsAfterP2).map(([id, r]) => `${id}:${r.status}`))}`)
+      fail('P2 제안이 생성되지 않음')
+    }
+    const p2 = proposalsAfterP2[p2Id]
+    console.log(`  P2: ${p2Id} | base_rev=${JSON.stringify(p2.base_revision)}`)
+    console.log(`  P1 상태: ${proposalsAfterP2[p1Id] ? proposalsAfterP2[p1Id].status : '(없음)'}`)
+
+    if (p2Id === p1Id) fail('P2.proposal_id가 P1과 같다')
+    if (proposalsAfterP2[p1Id]?.status !== 'superseded') {
+      fail(`P1이 terminal 상태가 아님: ${proposalsAfterP2[p1Id]?.status}`)
+    }
+    if (p2.instruction !== '결론을 더 짧게 수정해줘') {
+      fail(`P2에서 원래 요청이 보존되지 않음: ${JSON.stringify(p2.instruction)}`)
+    }
+    if (p2.before_content !== externalV11) {
+      fail(`P2.before가 최신 canonical 내용이 아님: ${JSON.stringify(p2.before_content)}`)
+    }
+    if (JSON.stringify(p2.base_revision) === JSON.stringify(p1.base_revision)) {
+      fail('P2.base_revision이 P1과 같다(최신 revision 아님)')
+    }
+    if (p2.file_id !== p1.file_id || p2.relative_path !== p1.relative_path) {
+      fail('P2가 다른 대상 파일을 가리킴')
+    }
+    ok('P2 — 새 proposal_id·base_revision·before·diff, P1은 superseded, 요청 보존, 대상 동일')
+
+    // P1의 stale 내용이 디스크에 쓰이지 않았는지
+    if (fs.readFileSync(targetPath, 'utf8') !== externalV11) fail('재계산만으로 파일이 변경됨')
+    const recalcCard = await cdp.evalJs("return document.querySelector('.jarvis-edit-card')?.innerText.replace(/\s+/g, ' ') || ''")
+    console.log(`  P2 카드: ${recalcCard.slice(0, 120)}`)
+    if (!/짧게 줄인 결론/.test(recalcCard)) fail('P2 diff에 새 내용이 보이지 않음')
+    ok('P1 stale 내용은 디스크에 쓰이지 않음 + 새 diff 표시')
+
+    // Apply P2 → 성공
+    await cdp.realClick(APPLY_BTN, 'Apply changes (P2)')
+    await cdp.waitFor(
+      "Array.from(document.querySelectorAll('.jarvis-edit-card button')).some((b) => b.textContent.trim() === 'Undo')",
+      'P2 적용 완료',
+      30000,
+    )
+    if (fs.readFileSync(targetPath, 'utf8') !== RECALC_CONTENT) {
+      fail(`P2 적용 내용 불일치: ${JSON.stringify(fs.readFileSync(targetPath, 'utf8'))}`)
+    }
+    ok('P2 Apply 성공 — 디스크 반영')
+
+    // Undo → P2 적용 직전 상태(외부 변경)로 복원
+    await cdp.realClick(UNDO_BTN, 'Undo (P2)')
+    await cdp.waitFor(
+      "Array.from(document.querySelectorAll('.jarvis-edit-card button')).some((b) => b.textContent.trim() === 'Close')",
+      'P2 Undo 완료',
+      30000,
+    )
+    if (fs.readFileSync(targetPath, 'utf8') !== externalV11) {
+      fail(`P2 Undo가 직전 상태를 복원하지 않음: ${JSON.stringify(fs.readFileSync(targetPath, 'utf8'))}`)
+    }
+    ok('P2 Undo — P2 적용 직전 상태로 복원')
+
+    // 원복 후 다음 시나리오를 위해 되돌린다.
+    fs.writeFileSync(targetPath, original, 'utf8')
 
     // --- E4: wrong target protection ---
     step('E4) Wrong target — Active File=A, 명시적 target=B면 B만 수정')
