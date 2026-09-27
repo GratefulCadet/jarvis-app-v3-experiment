@@ -229,6 +229,35 @@ function registerBridgeIpc({ ipcMain, app }) {
     return manager.writeFile(rootId, fileId, relativePath, content, payload?.revision)
   })
 
+  /* FILE ACCESS 확장 — 디스크 읽기(전체 허용) + 새 파일 생성(승인 루트 한정) */
+
+  ipcMain.handle('jarvis:disk-list', async (_event, payload) => {
+    const path = payload?.path
+    if (path !== undefined && path !== null && typeof path !== 'string') {
+      return { type: 'response', status: 'error', error: 'path는 문자열이어야 합니다' }
+    }
+    return manager.diskList(path || undefined)
+  })
+
+  ipcMain.handle('jarvis:disk-read', async (_event, payload) => {
+    const path = payload?.path
+    if (typeof path !== 'string' || !path.trim()) return _err('path가 필요합니다')
+    const maxChars = payload?.maxChars
+    if (maxChars !== undefined && maxChars !== null && typeof maxChars !== 'number') {
+      return _err('maxChars는 숫자여야 합니다')
+    }
+    return manager.diskRead(path.trim(), maxChars)
+  })
+
+  ipcMain.handle('jarvis:file-create', async (_event, payload) => {
+    const rootId = _field(payload, 'rootId', 'root_id', 'root')
+    const relativePath = _field(payload, 'path', 'relativePath', 'relative_path')
+    const content = payload?.content
+    if (!rootId || !relativePath) return _err('root_id와 path가 필요합니다')
+    if (typeof content !== 'string') return _err('content는 문자열이어야 합니다')
+    return manager.fileCreate(rootId, relativePath, content)
+  })
+
   ipcMain.handle('jarvis:link-project-file', async (_event, payload) => {
     const projectId = payload?.projectId
     const fileId = payload?.fileId

@@ -4,6 +4,14 @@ const {
 } = require('electron')
 
 contextBridge.exposeInMainWorld(
+  'freebuffNews',
+  {
+    get: () => ipcRenderer.invoke('freebuff-news:get'),
+    refresh: () => ipcRenderer.invoke('freebuff-news:refresh'),
+  },
+)
+
+contextBridge.exposeInMainWorld(
   'jarvisWindow',
   {
     prepareCommandCenter: () => {
@@ -167,6 +175,23 @@ contextBridge.exposeInMainWorld(
         path,
         content,
         revision,
+      })
+    },
+
+    /* FILE ACCESS 확장 — 디스크 읽기(전체 허용) + 새 파일 생성(승인 루트 한정) */
+    diskList: (path) => {
+      return ipcRenderer.invoke('jarvis:disk-list', { path })
+    },
+
+    diskRead: (path, maxChars) => {
+      return ipcRenderer.invoke('jarvis:disk-read', { path, maxChars })
+    },
+
+    fileCreate: (rootId, path, content) => {
+      return ipcRenderer.invoke('jarvis:file-create', {
+        rootId,
+        path,
+        content,
       })
     },
 

@@ -738,6 +738,88 @@ export default function useJarvisRuntime() {
     return result
   }, [])
 
+  /*
+    UX 통합(사용자 피드백) — 승인 한 번으로 생성+연결.
+
+    승인(디자인 상 명시적 행동)에 사용자가 '이 파일도 연결'을 곁들였을 때만
+    승인 응답이 끝난 직후 같은 canonical 경로(linkTaskFile)로 링크를 만든다.
+    새 write path 없음. 링크는 approve 응답의 events에서 실제로 만들어진
+    task(createdTask)와 요청 당시 Active File의 FileRef가 모두 있을 때만
+    시도한다 — 하나라도 없으면 조용히 건너뛴다(추측 링크 금지). 링크 실패는
+    기존 linkState.error로 표시되고, 작업 생성 자체는 이미 성공한 상태라
+    승인 결과(done)는 그대로 유지된다.
+  */
+  const approveAndLinkFile = useCallback(async () => {
+    const api = getRuntimeApi()
+    const current = stateRef.current
+    const toolCall = current.toolCall
+    if (
+      !api ||
+      !toolCall ||
+      current.status !== RUNTIME_STATUS.AWAITING_CONFIRMATION ||
+      approvalInFlightRef.current
+    ) return
+
+    approvalInFlightRef.current = true
+    dispatch({ type: RUNTIME_EVENT.APPROVE })
+    const response = await api.confirm(toolCall)
+
+    if (!response || response.status === 'error') {
+      approvalInFlightRef.current = false
+      dispatch({ type: RUNTIME_EVENT.ERROR, error: (response && response.error) || 'confirm 실패' })
+      return
+    }
+    if (response.status === 'awaiting_confirmation') {
+      approvalInFlightRef.current = false
+      // 승인 후 모델이 새 write를 제안 → 재차단 (설계 동작)
+      dispatch({
+        type: RUNTIME_EVENT.PERMISSION_REQUIRED,
+        toolCall: response.tool_call,
+        events: response.events,
+        traceId: response.trace_id,
+        tracePath: response.trace_path,
+        scratch: response.scratch,
+      })
+      return
+    }
+    if (response.status === 'final') {
+      dispatch({
+        type: RUNTIME_EVENT.APPROVE_RESOLVED,
+        text: response.text,
+        events: response.events,
+        traceId: response.trace_id,
+        tracePath: response.trace_path,
+        scratch: response.scratch,
+      })
+      approvalInFlightRef.current = false
+
+      // 승인 응답으로 실제 생성된 task + 요청 당시 Active File FileRef가 모두
+      // 있을 때만 같은 canonical 경로로 즉시 연결한다(사용자가 승인 시 선택).
+      // stateRef는 effect에서 갱신되므로 방금 디스패치한 상태를 반영하지 않는다
+      // — 승인 응답(events)과 진입 시점의 submittedActiveFile로 직접 판정한다.
+      const created = createdTaskFromEvents(response.events)
+      const active = current.submittedActiveFile
+      if (!created || !created.id || !active || !active.fileId) return
+      dispatch({ type: RUNTIME_EVENT.LINK_ACTIVE_FILE })
+      const result = await linkTaskFile({
+        taskId: created.id,
+        fileId: active.fileId,
+        relation: 'reference',
+      })
+      dispatch({
+        type: RUNTIME_EVENT.LINK_ACTIVE_FILE_RESOLVED,
+        ok: Boolean(result && result.ok),
+        error: result && result.error,
+        taskId: created.id,
+        taskTitle: created.title,
+        fileName: active.name || active.path || '',
+      })
+      return
+    }
+    approvalInFlightRef.current = false
+    dispatch({ type: RUNTIME_EVENT.ERROR, error: `예상하지 못한 confirm 응답: ${response.status}` })
+  }, [])
+
   const dismissLinkAffordance = useCallback(() => {
     dispatch({ type: RUNTIME_EVENT.DISMISS_LINK })
   }, [])
@@ -807,9 +889,12 @@ export default function useJarvisRuntime() {
     // Milestone B — 파생 표시 신호(영속 엔티티 아님).
     linkAffordance: selectLinkAffordance(state),
     linkState: state.linkState,
+    // UX 통합 — 승인 화면에서 '이 파일도 연결' 오퍼를 위한 요청 당시 파일.
+    submittedActiveFile: state.submittedActiveFile,
     submit,
     submitOrQueue,
     approve,
+    approveAndLinkFile,
     reject,
     dismiss,
     dismissBriefing,

@@ -2,11 +2,13 @@ import {
   useCallback,
   useEffect,
   useReducer,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react'
 
 import CommandCenter from './CommandCenter'
+import FreebuffNews from './FreebuffNews'
 import TreePrototype from './TreePrototype'
 import QuickPip from './QuickPip'
 import useJarvisRuntime, {
@@ -18,20 +20,82 @@ import useVoiceOutput from './useVoiceOutput'
 import { linkTaskFile } from './jarvisLinkApi'
 
 import './App.css'
+import './news.css'
 
 const PIP_BREAKPOINT = 500
 
 /*
-  Native Electron transition timings.
+  PiP ↔ Main signature transition timings.
 
   이 값들은 CSS transition과 맞물려 있으므로
   Anime.js Command Center choreography와 분리해서 유지한다.
+
+  Motion hierarchy is Core > workspace > content:
+  the Core establishes the direction first, the workspace reveal runs behind it,
+  and content only enters once the Core has settled. OPENING_MS must therefore not be
+  shorter than the Core transform in App.css, otherwise the view flips mid-flight and
+  the Core appears to cut.
 */
-const OPENING_MS = 500
+const CORE_MOVE_MS = 750
+const CONTENT_ENTER_MS = 320
+const OPENING_MS = CORE_MOVE_MS
 
 const CLOSING_PREP_MS = 240
 const CLOSING_MOVE_MS = 420
 const PIP_FADE_MS = 160
+
+/*
+  Reduced motion keeps the same state machine and the same outcome, but the travel and
+  the circular reveal are removed. The JS waits shrink with them so the surface never
+  lingers in a non-idle phase.
+*/
+const prefersReducedMotion = () =>
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+const motionWait = (duration) =>
+  wait(prefersReducedMotion() ? 0 : duration)
+
+/*
+  FLIP anchors.
+
+  The Main Core is not laid out at the workArea centre — the V4 shell parks it near
+  the top of the workspace — so an offset derived from the workArea centre under-travels
+  and the Core teleports when the view flips. Measure the real Core on both sides
+  instead: the PiP orb while the window is still small, and the Main Core after the
+  native swap. The difference is the transform the CSS has to play.
+*/
+const CORE_ANCHOR_SELECTORS = {
+  pip: '.pip-presence-orb',
+  main: '.core-container',
+}
+
+function measureCoreAnchor(view) {
+  const selector =
+    view === VIEW.PIP
+      ? CORE_ANCHOR_SELECTORS.pip
+      : CORE_ANCHOR_SELECTORS.main
+  const element =
+    document.querySelector(selector)
+  if (!element) {
+    return null
+  }
+  const rect =
+    element.getBoundingClientRect()
+  if (!rect.width) {
+    return null
+  }
+  return {
+    x:
+      rect.left +
+      rect.width / 2 +
+      window.screenX,
+    y:
+      rect.top +
+      rect.height / 2 +
+      window.screenY,
+  }
+}
 
 /*
   XState 같은 라이브러리를 아직 도입하지 않고,
@@ -84,6 +148,9 @@ const APP_EVENT = Object.freeze({
     'close-complete',
   CLOSE_ABORT:
     'close-abort',
+
+  OPEN_SWAPPED:
+    'open-swapped',
 })
 
 /*
@@ -142,44 +209,61 @@ const interactionReducer = (
       }
       return state
 
-    case APP_EVENT.OPEN_WINDOW_EXPANDED:
+    /*
+      The native window is already Main-sized here, so the Main layout exists and the
+      Core can finally be measured. The view flips while the phase is still
+      opening-start, which keeps the workspace content unmounted, so nothing appears
+      before the Core has been inverted onto the PiP position.
+    */
+    case APP_EVENT.OPEN_SWAPPED:
       if (
         state.view === VIEW.PIP &&
+        state.phase === PHASE.IDLE
+      ) {
+        return {
+          view: VIEW.COMMAND_CENTER,
+          phase: PHASE.OPENING_START,
+        }
+      }
+      return state
+
+    case APP_EVENT.OPEN_WINDOW_EXPANDED:
+      if (
         state.phase ===
           PHASE.OPENING_START
       ) {
         return {
           ...state,
-          phase: PHASE.OPENING,
+          phase:
+            PHASE.OPENING,
         }
       }
       return state
 
     case APP_EVENT.OPEN_COMPLETE:
       if (
-        state.view === VIEW.PIP &&
         state.phase ===
           PHASE.OPENING
       ) {
         return {
-          view:
-            VIEW.COMMAND_CENTER,
-          phase: PHASE.IDLE,
+          ...state,
+          phase:
+            PHASE.IDLE,
         }
       }
       return state
 
     case APP_EVENT.OPEN_ABORT:
       if (
-        state.view === VIEW.PIP &&
-        (state.phase ===
+        state.phase ===
           PHASE.OPENING_START ||
-          state.phase ===
-            PHASE.OPENING)
+        state.phase ===
+          PHASE.OPENING
       ) {
         return {
           ...state,
-          phase: PHASE.IDLE,
+          phase:
+            PHASE.IDLE,
         }
       }
       return state
@@ -318,6 +402,7 @@ const nextPaint = async () => {
 function CoreGraphic({
   onActivate,
   ariaLabel,
+  describedBy,
 }) {
   return (
     <div className="core-outer-ring">
@@ -338,6 +423,8 @@ function CoreGraphic({
           className="core-trigger"
           onClick={onActivate}
           aria-label={ariaLabel}
+          aria-describedby={describedBy}
+          title={ariaLabel}
         >
           <div className="core-energy" />
         </button>
@@ -379,6 +466,83 @@ function App() {
     contextOpen,
     setContextOpen,
   ] = useState(false)
+
+  const [newsOpen, setNewsOpen] = useState(false)
+
+  /*
+    Content choreography — the workspace content must not appear before the Core has
+    established where the space is coming from. On settle we mark the surface briefly so
+    CSS can run a single entrance pass; without it the Command Center simply appears at
+    full opacity the instant the view flips.
+  */
+  const [contentEntering, setContentEntering] = useState(false)
+  const contentEnterTimer = useRef(null)
+  /* Screen position of the PiP Core, captured on every opening. */
+  const pipAnchorRef = useRef(null)
+  /*
+    Publishes one end of the reveal's CSS interpolation. Both ends are plain numbers
+    set once per transition, so the browser — not a JS loop — does the travelling.
+  */
+  const setRevealEnd = useCallback((anchor) => {
+    const shell = shellRef.current
+    if (!shell) return
+    shell.style.setProperty('--reveal-end-x', `${anchor.x - window.screenX}px`)
+    shell.style.setProperty('--reveal-end-y', `${anchor.y - window.screenY}px`)
+  }, [])
+  /* PiP anchor waiting to be inverted onto the measured Main Core. */
+  const pendingFlipRef = useRef(null)
+  const flipAppliedRef = useRef(false)
+  const shellRef = useRef(null)
+
+  /*
+    FLIP inversion. Runs between the DOM update and the next paint, so the Core is
+    already sitting on the PiP position the moment the Main surface becomes visible.
+  */
+  useLayoutEffect(() => {
+    const pipAnchor = pendingFlipRef.current
+    if (phase !== PHASE.OPENING_START || !pipAnchor) return
+    const mainAnchor = measureCoreAnchor(VIEW.COMMAND_CENTER)
+    if (!mainAnchor) {
+      flipAppliedRef.current = false
+      return
+    }
+    setPipOffset({
+      x: pipAnchor.x - mainAnchor.x,
+      y: pipAnchor.y - mainAnchor.y,
+    })
+    /*
+      The reveal is a CSS interpolation between two points that are both known before
+      the transition starts: the PiP Core the user is looking at, and the Main Core the
+      layout actually produced. Handing both to CSS lets the browser move the circle's
+      centre and grow its radius in one interpolated pass, with no per-frame JS.
+    */
+    const shell = shellRef.current
+    if (shell) {
+      shell.style.setProperty('--reveal-start-x', `${pipAnchor.x - window.screenX}px`)
+      shell.style.setProperty('--reveal-start-y', `${pipAnchor.y - window.screenY}px`)
+    }
+    setRevealEnd(mainAnchor)
+    flipAppliedRef.current = true
+    pendingFlipRef.current = null
+  }, [phase, view, setRevealEnd])
+
+  const startContentEntrance = useCallback(() => {
+    if (contentEnterTimer.current) {
+      window.clearTimeout(contentEnterTimer.current)
+    }
+    if (prefersReducedMotion()) {
+      setContentEntering(false)
+      return
+    }
+    setContentEntering(true)
+    contentEnterTimer.current = window.setTimeout(() => {
+      setContentEntering(false)
+    }, CONTENT_ENTER_MS)
+  }, [])
+
+  useEffect(() => () => {
+    if (contentEnterTimer.current) window.clearTimeout(contentEnterTimer.current)
+  }, [])
 
   /*
     Active File — 현재 열려 있는 파일 편집기 단일 소유 state. FileEditor
@@ -543,15 +707,16 @@ function App() {
       }
 
       /*
-        FLIP 관점의 기존 transition을 그대로 보존한다.
+        FLIP, in the order that makes the geometry correct.
 
-        First  : 현재 PiP의 화면상 위치를 측정
-        Last   : workArea 전체에서 Core가 중앙에 놓일 최종 layout
-        Invert : --pip-offset-x/y로 "아직 PiP 위치에 있는 것처럼" 역보정
-        Play   : CSS transform이 offset → 0으로 움직이며 공간을 펼침
-
-        즉 별도 Motion 라이브러리를 넣지 않아도
-        현재 signature transition은 이미 FLIP과 유사한 구조다.
+        1. While the window is still PiP-sized, remember where the PiP Core actually
+           sits on screen. This is the origin the user is looking at.
+        2. Perform the single native bounds change. Nothing animates natively.
+        3. Only now can the Main Core's real layout position be measured, because the
+           V4 shell does not park it at the workArea centre.
+        4. Invert: hold the Core on the PiP position with no transition.
+        5. Release: the CSS transform plays the offset back to zero, so the Core
+           travels to where it genuinely belongs instead of teleporting on the view flip.
       */
       const geometry =
         await windowApi
@@ -561,21 +726,26 @@ function App() {
         return
       }
 
-      setPipOffset({
-        x: geometry.offsetX,
-        y: geometry.offsetY,
-      })
+      const pipAnchor =
+        measureCoreAnchor(
+          VIEW.PIP,
+        )
 
-      dispatch({
-        type:
-          APP_EVENT.OPEN_PREPARED,
-      })
+      if (!pipAnchor) {
+        return
+      }
 
-      await nextPaint()
+      pipAnchorRef.current =
+        pipAnchor
 
-      const expanded =
-        await windowApi
-          .expandCommandCenter()
+      let expanded
+      try {
+        expanded =
+          await windowApi
+            .expandCommandCenter()
+      } catch (error) {
+        console.warn('[jarvis] expandCommandCenter failed:', error?.message || error)
+      }
 
       if (!expanded) {
         dispatch({
@@ -585,7 +755,32 @@ function App() {
         return
       }
 
+      // Let the Main layout settle before its Core position can be trusted.
       await nextPaint()
+
+      /*
+        Flip the view first (still inside opening-start, so no content mounts), then let
+        the layout effect below measure the real Main Core and invert onto the PiP
+        position. A layout effect runs after the DOM is updated but before the browser
+        paints, so the user never sees the un-inverted Main layout.
+      */
+      pendingFlipRef.current =
+        pipAnchor
+
+      dispatch({
+        type:
+          APP_EVENT.OPEN_SWAPPED,
+      })
+
+      await nextPaint()
+
+      if (!flipAppliedRef.current) {
+        dispatch({
+          type:
+            APP_EVENT.OPEN_ABORT,
+        })
+        return
+      }
 
       dispatch({
         type:
@@ -593,13 +788,28 @@ function App() {
       })
 
       await nextFrame()
-      await wait(OPENING_MS)
+      await motionWait(OPENING_MS)
 
       dispatch({
         type:
           APP_EVENT.OPEN_COMPLETE,
       })
-    }, [phase, view])
+
+      /*
+        The inversion offset has served its purpose. Leaving it set meant the next
+        transition measured the Main Core with the previous cycle's offset still
+        applied, so it read back as the PiP position: the FLIP inversion silently
+        became a no-op and the reveal was handed two identical endpoints, which pinned
+        its centre on the PiP spot for the whole opening. Clearing it here makes every
+        round trip measure the real Main layout, not just the first one.
+      */
+      setPipOffset({
+        x: 0,
+        y: 0,
+      })
+
+      startContentEntrance()
+    }, [phase, view, startContentEntrance, setPipOffset])
 
   const returnToPip =
     useCallback(async () => {
@@ -623,10 +833,51 @@ function App() {
           APP_EVENT.CLOSE_BEGIN,
       })
 
+      /*
+        The Main Core is already at its resting place when closing starts and does not
+        move during closing-prep, so the reveal's origin can be published before the
+        prep begins. Waiting until after the prep left the circle collapsing toward the
+        50%/50% fallback in the stylesheet and then sliding sideways to catch up.
+      */
+      const prepAnchor =
+        measureCoreAnchor(
+          VIEW.COMMAND_CENTER,
+        )
+      if (prepAnchor) {
+        setRevealEnd(
+          prepAnchor,
+        )
+      }
+
       await nextFrame()
-      await wait(
+      await motionWait(
         CLOSING_PREP_MS,
       )
+
+      /*
+        Aim at the PiP Core position that was measured when the user last saw it, not
+        at a re-derived workArea centre, so the Core lands exactly where the PiP will
+        appear after the native swap.
+      */
+      const mainAnchor =
+        measureCoreAnchor(
+          VIEW.COMMAND_CENTER,
+        )
+      const pipAnchor =
+        pipAnchorRef.current
+
+      if (mainAnchor && pipAnchor) {
+        setPipOffset({
+          x: pipAnchor.x - mainAnchor.x,
+          y: pipAnchor.y - mainAnchor.y,
+        })
+        const shell = shellRef.current
+        if (shell) {
+          shell.style.setProperty('--reveal-start-x', `${pipAnchor.x - window.screenX}px`)
+          shell.style.setProperty('--reveal-start-y', `${pipAnchor.y - window.screenY}px`)
+        }
+        await nextPaint()
+      }
 
       dispatch({
         type:
@@ -634,7 +885,7 @@ function App() {
       })
 
       await nextFrame()
-      await wait(
+      await motionWait(
         CLOSING_MOVE_MS,
       )
 
@@ -645,9 +896,14 @@ function App() {
 
       await nextPaint()
 
-      const collapsed =
-        await windowApi
-          .collapseToPip()
+      let collapsed
+      try {
+        collapsed =
+          await windowApi
+            .collapseToPip()
+      } catch (error) {
+        console.warn('[jarvis] collapseToPip failed:', error?.message || error)
+      }
 
       if (!collapsed) {
         dispatch({
@@ -672,13 +928,19 @@ function App() {
       })
 
       await nextFrame()
-      await wait(PIP_FADE_MS)
+      await motionWait(PIP_FADE_MS)
 
       dispatch({
         type:
           APP_EVENT.CLOSE_COMPLETE,
       })
-    }, [phase, view])
+
+      // See the note at OPEN_COMPLETE: a surviving offset corrupts the next measurement.
+      setPipOffset({
+        x: 0,
+        y: 0,
+      })
+    }, [phase, view, setRevealEnd, setPipOffset])
 
   /*
     Input source를 product intent로 한 번 변환한다.
@@ -746,6 +1008,12 @@ function App() {
           return
         }
 
+        if (newsOpen) {
+          event.preventDefault()
+          setNewsOpen(false)
+          return
+        }
+
         // If fileEditor or context drawer is open, dismiss that first before collapsing to PiP
         if (fileEditor) {
           // Handled by FileEditor's capturing keydown listener
@@ -776,7 +1044,7 @@ function App() {
         handleKeyDown,
       )
     }
-  }, [view, phase, fileEditor, contextOpen, requestIntent])
+  }, [view, phase, fileEditor, contextOpen, newsOpen, requestIntent])
 
   const phaseClass =
     phase === PHASE.IDLE
@@ -794,7 +1062,12 @@ function App() {
       ? 'quick-pip-enabled'
       : ''
 
-  const showLabel = false
+  // Content entrance plays once, after the Core has settled on the Main side.
+  const contentEnterClass =
+    !isPip && contentEntering
+      ? 'is-content-entering'
+      : ''
+
 
   const showAssistantSurface =
     !isPip &&
@@ -811,6 +1084,7 @@ function App() {
 
   const showTreePrototype =
     showAssistantSurface &&
+    !newsOpen &&
     (contextOpen || Boolean(fileEditor))
 
   /*
@@ -833,12 +1107,14 @@ function App() {
 
   return (
     <main
+      ref={shellRef}
       className={[
         'jarvis-shell',
         'v4-assistant-shell',
         modeClass,
         phaseClass,
         quickPipClass,
+        contentEnterClass,
       ]
         .filter(Boolean)
         .join(' ')}
@@ -854,7 +1130,11 @@ function App() {
           `${pipOffset.y}px`,
       }}
     >
-      {showCommandCenter && (
+      {showCommandCenter && newsOpen && (
+        <FreebuffNews onBack={() => setNewsOpen(false)} />
+      )}
+
+      {showCommandCenter && !newsOpen && (
         <CommandCenter
           executionContext={executionContext}
           runtime={runtime}
@@ -870,6 +1150,7 @@ function App() {
           }
           contextOpen={contextOpen}
           onToggleContext={() => setContextOpen((open) => !open)}
+          onOpenNews={() => setNewsOpen(true)}
         />
       )}
 
@@ -881,6 +1162,18 @@ function App() {
             fileEditor={fileEditor}
             openFile={setFileEditor}
             closeFile={() => setFileEditor(null)}
+            onFocusTask={(task) => {
+              if (!task?.node?.id) return
+              setExecutionContext({
+                node: {
+                  id: task.node.id,
+                  label: task.node.label,
+                  type: task.node.type || 'task',
+                },
+                path: task.path || [],
+              })
+              setContextOpen(true)
+            }}
             onOpenExecution={(context) => {
               if (context) {
                 setExecutionContext(context)
@@ -906,18 +1199,18 @@ function App() {
                   ? 'Open JARVIS Command Center'
                   : 'Return JARVIS to PiP'
               }
+              describedBy={!isPip ? 'jarvis-core-hint' : undefined}
             />
 
 
-            {showLabel && (
-              <p className="core-label">
-                JARVIS
-              </p>
-            )}
           </section>
         )}
 
-        {!isPip && <span className="jarvis-core-hint">작은 창으로 · PiP</span>}
+        {!isPip && (
+          <span className="jarvis-core-hint" id="jarvis-core-hint">
+            Core 클릭 · PiP로 접기 · Esc
+          </span>
+        )}
 
         {/* PiP is a compact presence surface over the shared runtime. */}
         <QuickPip

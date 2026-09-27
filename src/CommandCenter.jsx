@@ -16,6 +16,7 @@ import {
   Link2,
   Mic,
   PanelLeft,
+  Newspaper,
   Sparkles,
   Volume2,
   VolumeX,
@@ -183,6 +184,7 @@ export default function CommandCenter({
   activeProjectTitle,
   contextOpen = false,
   onToggleContext,
+  onOpenNews,
 }) {
   const rootRef = useRef(null)
   const promptInputRef = useRef(null)
@@ -377,6 +379,17 @@ export default function CommandCenter({
 
             <button
               type="button"
+              className="jarvis-news-button"
+              onClick={onOpenNews}
+              aria-label="Open Freebuff AI News"
+              title="무료 소스에서 AI 뉴스와 프로젝트를 수집합니다"
+            >
+              <Newspaper size={14} strokeWidth={1.8} aria-hidden="true" />
+              <span>AI 뉴스</span>
+            </button>
+
+            <button
+              type="button"
               className={[
                 'jarvis-context-button',
                 contextOpen ? 'is-active' : '',
@@ -391,11 +404,6 @@ export default function CommandCenter({
               <PanelLeft size={14} strokeWidth={1.8} aria-hidden="true" />
               <span>작업 · 파일</span>
             </button>
-
-            {/*
-              UX 정리 — PiP 버튼 제거. 복귀는 Core 클릭 또는 Escape다.
-              헤더는 JARVIS 식별 + context 한 줄 + Context 토글 + SCRATCH만 남는다.
-            */}
 
             {runtime.scratch && (
               <div className="jarvis-scratch-badge">SCRATCH</div>
@@ -651,6 +659,7 @@ export default function CommandCenter({
           <JarvisRuntimePanel
             runtime={runtime}
             onApprove={runtime.approve}
+            onApproveAndLink={runtime.approveAndLinkFile}
             onReject={runtime.reject}
             onDismiss={runtime.dismiss}
           >

@@ -118,13 +118,23 @@
 
   150vmax는 workArea 전체를
   충분히 덮는다.
+
+  The centre is expressed in the same px custom properties as the transition states.
+  A percentage centre cannot be interpolated into a length, so leaving 50% 50% here made
+  Chromium keep the percentage form for the whole closing-prep transition and then snap
+  to the measured position at the end — the circle visibly jumped instead of holding
+  still on the Core. The radius covers the viewport either way, so the centre is only
+  there to give the next transition two pixel endpoints to interpolate between.
 */
 .command-center-mode::before {
   opacity: 1;
 
   clip-path:
     circle(
-      150vmax at 50% 50%
+      150vmax
+      at
+      var(--reveal-end-x, 50%)
+      var(--reveal-end-y, 50%)
     );
 }
 
@@ -889,7 +899,7 @@
 .command-center-mode .pip-interaction-zone {
   position: absolute;
   left: 50%;
-  top: 22%;
+  top: 16%;
   transform: translate(-50%, -50%);
 }
 
@@ -1035,6 +1045,108 @@
       ease-out;
 }
 
+/*
+  The view flips to command-center before the Core travels, so the Main side needs
+  its own opening pair. `opening-start` is the measured inversion frame (no
+  transition), `opening` is the travel.
+
+  These must out-specify `.v4-assistant-shell.command-center-mode .core-container`,
+  which centres the Core with translate(-50%,-50%) scale(.78) and would otherwise win
+  on source order. The centring translate is preserved and the measured offset is added
+  on top of it.
+*/
+.v4-assistant-shell.command-center-mode.opening-start .core-container {
+  transform:
+    translate(
+      calc(-50% + var(--pip-offset-x)),
+      calc(-50% + var(--pip-offset-y))
+    )
+    scale(0.75);
+
+  transition: none;
+}
+
+.v4-assistant-shell.command-center-mode.opening-start::before {
+  opacity: 1;
+
+  clip-path:
+    circle(
+      0px
+      at
+      var(--reveal-start-x, 50%)
+      var(--reveal-start-y, 50%)
+    );
+
+  transition: none;
+}
+
+.v4-assistant-shell.command-center-mode.opening .core-container {
+  transform:
+    translate(-50%, -50%)
+    scale(0.78);
+
+  transition:
+    transform
+      750ms
+      cubic-bezier(
+        0.22,
+        1,
+        0.36,
+        1
+      );
+}
+
+/*
+  The workspace is pulled open by the Core.
+
+  Both endpoints are known before the transition starts — the PiP Core the user is
+  looking at and the Main Core the layout produced — so the browser interpolates the
+  circle's radius and its centre in a single pass. No per-frame JS is involved.
+
+  The easing is deliberately the same curve the Core travels on. Matching shapes is
+  what keeps the reveal attached to the Core: with a different curve the circle fell
+  262px behind mid-flight, because the Core's curve is heavily front-loaded while a
+  symmetric ease is not.
+
+  650ms is measured, not guessed. Candidates were run through the rAF harness against
+  the same rAF sample the acceptance uses, comparing when the circle stops moving with
+  when the Core stops moving (Core settles at ~580ms on every run):
+
+    500ms  reveal ends 67ms BEFORE the Core  — background finishes first, the Core
+                                                stops being the thing that leads
+    650ms  reveal ends 67ms after the Core   — 26px peak separation
+    800ms  reveal ends 191ms after the Core  — 12px peak separation
+    950ms  reveal ends 317ms after the Core  — 42px peak separation, and the last
+                                                third of the transition moves the
+                                                circle by a few pixels on screen that
+                                                is already fully uncovered
+
+  650ms is the shortest duration that still finishes after the Core, so it keeps the
+  Core leading without leaving a tail the viewer cannot see. Content then enters at
+  ~850ms, roughly 200ms after the workspace has settled.
+*/
+.v4-assistant-shell.command-center-mode.opening::before {
+  opacity: 1;
+
+  clip-path:
+    circle(
+      150vmax
+      at
+      var(--reveal-end-x, 50%)
+      var(--reveal-end-y, 50%)
+    );
+
+  transition:
+    clip-path
+      650ms
+      cubic-bezier(
+        0.22,
+        1,
+        0.36,
+        1
+      );
+}
+
 /* ==================================================
    CLOSE STEP 1
    전체 배경 → 중앙 원 응축
@@ -1043,10 +1155,7 @@
 .command-center-mode
 .closing-prep {
   pointer-events: none;
-}
-
-.command-center-mode.closing-prep
-.core-container {
+}.command-center-mode.closing-prep .core-container {
   transform:
     translate3d(
       0,
@@ -1055,6 +1164,51 @@
     )
     scale(1);
 
+  transition: none;
+}
+
+/*
+  Closing needs the same out-specification as opening: the V4 layout rule centres the
+  Core with translate(-50%,-50%) scale(.78) and otherwise wins on source order, which
+  left the Core parked in the middle while only the background condensed.
+*/
+.v4-assistant-shell.command-center-mode.closing-prep .core-container {
+  transform:
+    translate(-50%, -50%)
+    scale(0.78);
+
+  transition: none;
+}
+
+.v4-assistant-shell.command-center-mode.closing-moving .core-container,
+.v4-assistant-shell.command-center-mode.closing-swap .core-container {
+  transform:
+    translate(
+      calc(-50% + var(--pip-offset-x)),
+      calc(-50% + var(--pip-offset-y))
+    )
+    scale(0.75);
+
+  transition:
+    transform
+      420ms
+      cubic-bezier(
+        0.22,
+        1,
+        0.36,
+        1
+      );
+}
+
+/*
+  The native bounds swap happens inside closing-swap. The measured offset is expressed
+  in the old window's coordinate space, so for the single frame in which the window is
+  being resized the Core would otherwise render far off its target. Hiding it for that
+  frame turns the native resize into an invisible cut instead of a visible jump; the PiP
+  surface then fades in over the already-correct bounds.
+*/
+.v4-assistant-shell.command-center-mode.closing-swap .core-container {
+  opacity: 0;
   transition: none;
 }
 
@@ -1069,8 +1223,8 @@
     circle(
       300px
       at
-      50%
-      50%
+      var(--reveal-end-x, 50%)
+      var(--reveal-end-y, 50%)
     );
 
   transition:
@@ -1087,10 +1241,7 @@
 /* ==================================================
    CLOSE STEP 2
    중앙 → 실제 PiP 위치
-   ================================================== */
-
-.command-center-mode.closing-moving
-.core-container {
+   ================================================== */.command-center-mode.closing-moving .core-container {
   transform:
     translate3d(
       var(--pip-offset-x),
@@ -1110,26 +1261,21 @@
       );
 }
 
+/* Closing mirrors opening: the circle travels back to the PiP Core while shrinking. */
 .command-center-mode.closing-moving::before {
   opacity: 1;
 
   clip-path:
     circle(
-      105px
+      0px
       at
-      calc(
-        50% +
-        var(--pip-offset-x)
-      )
-      calc(
-        50% +
-        var(--pip-offset-y)
-      )
+      var(--reveal-start-x, 50%)
+      var(--reveal-start-y, 50%)
     );
 
   transition:
     clip-path
-      420ms
+      460ms
       cubic-bezier(
         0.22,
         1,
@@ -1271,6 +1417,82 @@
     opacity
       160ms
       ease-out;
+}
+
+/* ==================================================
+   CONTENT ENTRANCE
+
+   Core first, then the workspace, then the content.
+   The view flip already happens when the Core settles
+   (OPENING_MS === CORE_MOVE_MS), so this pass only
+   covers the content's own arrival instead of letting
+   it appear at full opacity in a single frame.
+   ================================================== */
+
+@keyframes jarvis-content-enter {
+  from {
+    opacity: 0;
+    transform:
+      translateY(10px)
+      scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform:
+      translateY(0)
+      scale(1);
+  }
+}
+
+.command-center-mode.is-content-entering .command-panel-runtime,
+.command-center-mode.is-content-entering .jarvis-runtime-panel,
+.command-center-mode.is-content-entering .jarvis-core-hint {
+  animation:
+    jarvis-content-enter
+    320ms
+    cubic-bezier(
+      0.22,
+      1,
+      0.36,
+      1
+    )
+    both;
+}
+
+/*
+  Reduced motion — the state machine, the native swap and every control stay exactly
+  the same. Only the travel and the long circular reveal are removed, and the content
+  entrance is skipped because App.jsx also shortens the JS waits to match.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .pip-mode.opening-start .core-container,
+  .pip-mode.opening .core-container,
+  .command-center-mode.closing-prep .core-container,
+  .command-center-mode.closing-moving .core-container,
+  .command-center-mode.closing-swap .core-container,
+  .pip-mode.closing-swap .core-container,
+  .pip-mode.pip-fade .core-container {
+    transform: none;
+    transition: none;
+  }
+
+  .pip-mode.opening-start::before,
+  .pip-mode.opening::before,
+  .command-center-mode.closing-prep::before,
+  .command-center-mode.closing-moving::before,
+  .command-center-mode.closing-swap::before,
+  .pip-mode.closing-swap::before,
+  .pip-mode.pip-fade::before {
+    clip-path: none;
+    transition: none;
+  }
+
+  .command-center-mode.is-content-entering .command-panel-runtime,
+  .command-center-mode.is-content-entering .jarvis-runtime-panel,
+  .command-center-mode.is-content-entering .jarvis-core-hint {
+    animation: none;
+  }
 }
 
 /* ==================================================
@@ -8473,6 +8695,30 @@
   font-style: italic;
 }
 
+/*
+  UX 통합 — 승인 화면의 '이 파일도 연결' 옵션.
+  체크하면 승인 버튼이 '승인하고 연결'로 바뀌고, 승인이 끝나는 대로
+  같은 canonical 경로로 파일이 연결된다(별도 연결 카드 단계 없음).
+*/
+.jarvis-permission-link-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 1px solid rgba(126, 219, 255, 0.28);
+  border-radius: 8px;
+  background: rgba(126, 219, 255, 0.06);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.jarvis-permission-link-option input {
+  accent-color: rgba(126, 219, 255, 0.9);
+  cursor: pointer;
+}
+
 .jarvis-permission-actions {
   display: flex;
   gap: 8px;
@@ -9449,6 +9695,7 @@
 }
 
 .v4-context-drawer .tree-prototype-overview {
+  display: block;
   position: absolute;
   inset: 0;
   width: auto;
@@ -9490,7 +9737,8 @@
   mask-image: none;
 }
 
-/* dock 제거 (2026-09 UX 정리) — 규칙은 남기지 않는다 */
+/* The legacy floating action dock is not part of the V4 context drawer. */
+.v4-context-drawer .tree-prototype-dock { display: none; }
 
 /*
   FILES 탐색기(4번) — dir 행. 클릭으로 펼치고/접는다. chevron 회전은 인라인
@@ -9539,6 +9787,49 @@
   text-align: left;
   cursor: pointer;
   padding: 0;
+}
+
+/*
+  FILE ACCESS 확장 — FILES 섹션의 새 파일 생성 폼.
+  헤더의 '새 파일…' 버튼 아래에 인라인으로 펼쳐진다.
+*/
+.tree-prototype-new-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tree-prototype-new-file input {
+  flex: 1;
+  min-width: 120px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 11px;
+}
+
+.tree-prototype-new-file input:focus {
+  outline: 1px solid rgba(126, 219, 255, 0.6);
+  outline-offset: 0;
+}
+
+.tree-prototype-new-file button {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tree-prototype-new-file button[type='submit']:hover {
+  border-color: rgba(126, 219, 255, 0.7);
+  color: rgba(126, 219, 255, 0.95);
 }
 
 .tree-prototype-files-root-name {
@@ -9895,20 +10186,39 @@
   }
 }
 
-/* Workspace UX: reserve physical space for context and the document. */
+/* Reserve a top-centered Core control and keep the runtime/composer below it. */
 .v4-assistant-shell.command-center-mode { --work-side: min(380px, 32vw); }
 .v4-assistant-shell.command-center-mode[data-file-open="true"] { --work-side: 48vw; }
 .v4-assistant-shell.command-center-mode:is([data-context-open="true"], [data-file-open="true"]) .command-panel-runtime {
   left: 24px;
   width: calc(100vw - var(--work-side) - 64px);
 }
-.v4-assistant-shell.command-center-mode .pip-interaction-zone {
-  top: 60px;
-  left: 72px;
-  width: 72px;
-  height: 72px;
+.v4-assistant-shell.command-center-mode:is([data-context-open="true"], [data-file-open="true"]) .pip-interaction-zone,
+.v4-assistant-shell.command-center-mode:is([data-context-open="true"], [data-file-open="true"]) .jarvis-core-hint {
+  left: calc((100vw - var(--work-side)) / 2);
 }
-.v4-assistant-shell.command-center-mode .core-container { transform: scale(.28); }
+.v4-assistant-shell.command-center-mode .pip-interaction-zone {
+  top: 8%;
+  left: 50%;
+  width: 200px;
+  height: 200px;
+  transform: translate(-50%, -10%);
+  z-index: 6;
+  pointer-events: none;
+}
+.v4-assistant-shell.command-center-mode .core-container {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 184px;
+  height: 184px;
+  transform: translate(-50%, -50%) scale(.78);
+  pointer-events: none;
+}
+.v4-assistant-shell.command-center-mode .core-trigger { pointer-events: auto; -webkit-app-region: no-drag; }
+.v4-assistant-shell.command-center-mode .core-trigger { width: 112px; height: 112px; }
+.v4-assistant-shell.command-center-mode .core-energy { width: 72px; height: 72px; }
+.v4-assistant-shell.command-center-mode .jarvis-core-hint { display: block; }
 .jarvis-core-hint {
   position: absolute;
   left: 100%;
@@ -9922,7 +10232,8 @@
 }
 .v4-assistant-shell .command-center-orbit-guide,
 .v4-assistant-shell .command-center-axis { display: none; }
-.v4-assistant-shell .command-panel-runtime {
+.v4-assistant-shell.command-center-mode .command-panel-runtime {
+  top: clamp(220px, 32vh, 300px);
   border: 1px solid #303039;
   border-radius: 20px;
   background: #121216;
@@ -9936,8 +10247,93 @@
 }
 .v4-assistant-shell .command-panel-eyebrow { font-size: 16px; color: #f4f4f7; letter-spacing: .12em; }
 .v4-assistant-shell .jarvis-context-line { flex: 1; font-size: 13px; white-space: normal; }
-.v4-assistant-shell .jarvis-context-button { margin-left: auto; min-height: 36px; font-size: 13px; color: #dddde5; letter-spacing: 0; }
-.v4-assistant-shell .jarvis-command-form {
+.v4-assistant-shell .jarvis-context-button { margin-left: 0; min-height: 36px; font-size: 13px; color: #dddde5; letter-spacing: 0; } .v4-assistant-shell .jarvis-return-pip-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid #45454f; border-radius: 10px; background: #202027; color: #e7e7ee; font: inherit; font-size: 12px; cursor: pointer; }
+.v4-assistant-shell .jarvis-return-pip-button:hover { border-color: #737381; background: #2a2a33; }
+.v4-assistant-shell .jarvis-return-pip-button:focus-visible { outline: 2px solid #d6dcff; outline-offset: 2px; }
+.workspace-explorer-root { display: grid; gap: 5px; margin: 8px 0 10px; padding: 10px; border: 1px solid #34343d; border-radius: 12px; background: #17171d; }
+.workspace-explorer-root-heading { display: flex; align-items: center; gap: 8px; min-width: 0; color: #ededf2; }
+.workspace-explorer-root-heading strong { min-width: 0; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-explorer-root-path, .workspace-explorer-current-folder code, .workspace-explorer-destination code, .workspace-explorer-full-path { color: #a5a5b0; font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+
+/*
+  Path awareness — show one compact line, never a stacked column. The tail keeps
+  the deepest folders and the filename; the full path opens on demand and stays
+  selectable so copying a real path is always possible.
+*/
+.workspace-explorer-path { display: grid; gap: 3px; min-width: 0; }
+.workspace-explorer-path.is-empty { color: #8d8d99; font-size: 10px; }
+.workspace-explorer-path-toggle {
+  display: grid; gap: 1px; width: 100%; min-width: 0;
+  padding: 2px 4px; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.workspace-explorer-path-toggle:hover, .workspace-explorer-path-toggle:focus-visible { border-color: #3d3d47; background: #1e1e25; }
+.workspace-explorer-path-compact {
+  display: block; min-width: 0; color: #a5a5b0; font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left;
+}
+.workspace-explorer-path-hint { color: #8b8b97; font-size: 9px; line-height: 1.3; }
+.workspace-explorer-path-toggle:hover .workspace-explorer-path-hint, .workspace-explorer-path-toggle:focus-visible .workspace-explorer-path-hint { color: #d5d5de; }
+.workspace-explorer-path-detail { display: grid; gap: 4px; padding: 5px 4px; border: 1px solid #35353f; border-radius: 7px; background: #191920; }
+.workspace-explorer-path-full { display: block; max-height: 5.4em; overflow: auto; color: #c3c3cd; font: 10px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; user-select: text; }
+.workspace-explorer-path-copy {
+  display: inline-flex; align-items: center; gap: 4px; justify-self: start;
+  padding: 3px 7px; border: 1px solid #45454f; border-radius: 6px; background: #24242c;
+  color: #cfcfd8; font: inherit; font-size: 10px; cursor: pointer;
+}
+.workspace-explorer-path-copy:hover, .workspace-explorer-path-copy:focus-visible { color: #fff; border-color: #5c5c68; }
+.workspace-explorer-create { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 6px 9px; border: 1px solid #45454f; border-radius: 8px; background: #24242c; color: #ececf2; font: inherit; font-size: 11px; cursor: pointer; }
+.workspace-explorer-current-folder { display: grid; gap: 3px; padding-top: 7px; border-top: 1px solid #303039; }
+.workspace-explorer-bounded-note { color: #a7a7b1; font-size: 10px; line-height: 1.4; }
+.workspace-explorer-task-link { width: fit-content; padding: 0; border: 0; background: transparent; color: #dddde5; font-size: 10px; font-weight: 500; text-align: left; cursor: pointer; }
+.workspace-explorer-task-link:hover, .workspace-explorer-task-link:focus-visible { color: #fff; text-decoration: underline; }
+.workspace-explorer-current-folder > span, .workspace-explorer-task-links > span { color: #9696a3; font-size: 10px; }
+.workspace-explorer-current-folder strong { color: #e4e4eb; font-size: 11px; }
+.workspace-explorer-folder.is-selected { background: #25252d; box-shadow: inset 2px 0 #cfd3e6; }
+.workspace-explorer-folder .tree-prototype-map-label { justify-content: flex-start; gap: 6px; text-align: left; }
+.workspace-explorer-linked-marker { color: #c8cbd8; font-size: 12px; }
+.workspace-explorer-active { display: grid; gap: 5px; margin: 10px 2px 4px; padding: 10px; border: 1px solid #41414b; border-radius: 10px; background: #1c1c23; }
+.workspace-explorer-active-label { color: #aaaab6; font-size: 9px; font-weight: 700; letter-spacing: .12em; }
+.workspace-explorer-active > strong { color: #f0f0f4; font-size: 12px; }
+.workspace-explorer-breadcrumb { display: flex; flex-wrap: wrap; color: #c8c8d1; font-size: 10px; line-height: 1.5; }
+.workspace-explorer-task-links { display: grid; gap: 3px; margin-top: 3px; padding-top: 7px; border-top: 1px solid #373740; }
+.workspace-explorer-task-links strong,
+.workspace-explorer-task-link { color: #dddde5; font-size: 10px; font-weight: 500; }
+.workspace-explorer-task-link { width: fit-content; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.workspace-explorer-task-link:hover,
+.workspace-explorer-task-link:focus-visible { color: #fff; text-decoration: underline; }
+.workspace-explorer-bounded-note { color: #a7a7b1; font-size: 10px; line-height: 1.4; }
+.workspace-explorer-task-links.is-unlinked { color: #9999a4; font-size: 10px; }
+.workspace-explorer-task-context { color: #a8a8b3; font-size: 10px; }
+.workspace-explorer-create-form { display: grid; gap: 7px; margin: 8px 2px; padding: 10px; border: 1px solid #41414b; border-radius: 10px; background: #202027; }
+.workspace-explorer-destination { display: grid; gap: 3px; color: #dfdfe7; font-size: 11px; }
+.workspace-explorer-destination code { display: block; }
+.workspace-file-editor-breadcrumb { display: flex; flex-wrap: wrap; margin-top: 6px; color: #c9c9d1; font-size: 11px; line-height: 1.5; }
+.workspace-file-editor-path { max-height: 3.2em; overflow: auto; overflow-wrap: anywhere; }
+.jarvis-permission-file-destination { display: grid; gap: 4px; margin: 10px 0; padding: 10px; border: 1px solid #41414b; border-radius: 9px; background: rgba(255,255,255,.035); }
+.jarvis-permission-file-destination strong { color: #f0f0f4; font-size: 13px; }
+.jarvis-permission-file-destination span { color: #c3c3cd; font-size: 11px; }
+.jarvis-permission-file-destination code { color: #9f9faa; font: 10px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+.pip-mode .quick-pip { -webkit-app-region: drag; cursor: grab; user-select: none; }
+.pip-mode .quick-pip:active { cursor: grabbing; }
+.pip-mode .quick-pip button,
+.pip-mode .quick-pip input,
+.pip-mode .quick-pip textarea,
+.pip-mode .quick-pip select,
+.pip-mode .quick-pip a,
+.pip-mode .quick-pip label,
+.pip-mode .quick-pip [contenteditable="true"],
+.pip-mode .quick-pip .pip-presence-copy,
+.pip-mode .quick-pip .jarvis-runtime-panel,
+.pip-mode .quick-pip .jarvis-runtime-panel * { -webkit-app-region: no-drag; }
+.pip-mode .pip-presence > .jarvis-runtime-panel.is-permission { left: 50%; transform: translateX(-50%); width: 230px; }
+.pip-mode .pip-presence > .jarvis-runtime-panel.is-done { top: 140px; left: 50%; transform: translateX(-50%); width: 230px; max-height: 66px; overflow: auto; }
+.pip-mode .pip-presence-resume { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 230px; max-height: 138px; overflow: auto; }
+.pip-mode .pip-presence-resume .jarvis-runtime-quiet-note { max-height: 42px; overflow: hidden; }
+.pip-mode .pip-presence-resume .jarvis-link-affordance { max-height: 38px; overflow: auto; }
+.pip-mode .pip-presence > .jarvis-runtime-panel.is-error { top: 142px; left: 50%; transform: translateX(-50%); width: 230px; max-height: 66px; overflow: auto; }
+@media (max-width: 760px) { .v4-assistant-shell.command-center-mode .pip-interaction-zone { top: 4%; left: 50%; width: 132px; height: 132px; } .v4-assistant-shell.command-center-mode .core-container { transform: translate(-50%, -50%) scale(.62); } .v4-assistant-shell.command-center-mode .jarvis-core-hint { left: 50%; top: calc(4% + 108px); font-size: 10px; } .v4-assistant-shell.command-center-mode .command-panel-runtime { top: 190px; } }
+.v4-assistant-shell  .jarvis-command-form {
   order: 10;
   position: sticky;
   bottom: 0;
@@ -9967,24 +10363,45 @@
 .v4-assistant-shell .jarvis-active-file-chip,
 .v4-assistant-shell .jarvis-quick-action-btn { min-height: 32px; font-size: 12px; }
 .v4-assistant-shell .v4-context-drawer { top: 132px; bottom: 32px; right: 24px; width: var(--work-side); background: #121216; }
+.v4-assistant-shell.command-center-mode[data-file-open="true"] .v4-context-drawer { width: calc(var(--work-side) * .375); }
 .workspace-file-editor {
   box-sizing: border-box;
   top: 132px;
-  right: 24px;
+  right: calc(var(--work-side, 48vw) * .375 + 40px);
   bottom: 32px;
-  width: calc(48vw - 0px);
+  width: calc(var(--work-side, 48vw) * .625 - 40px);
   background: #16161c;
   color: #ededf2;
 }
 .workspace-file-editor textarea { min-height: 0; width: 100%; box-sizing: border-box; font-size: 14px; line-height: 1.7; }
 .workspace-file-editor-header > div { min-width: 0; overflow-wrap: anywhere; }
-@media (max-width: 1000px) and (min-width: 501px) {
-  .v4-assistant-shell.command-center-mode .command-panel-runtime { top: 108px; bottom: 16px; padding: 16px; }
+@media (max-width: 1000px) and (min-width: 501px) {.v4-assistant-shell.command-center-mode .command-panel-runtime {
+  top: clamp(210px, 32vh, 260px); bottom: 16px; padding: 16px;
+}
+
+  .v4-assistant-shell.command-center-mode .pip-interaction-zone { top: 5%; left: calc(50% - 32px); width: 160px; height: 160px; }
+  .v4-assistant-shell.command-center-mode .core-container { transform: translate(-50%, -50%) scale(.68); }
+  .v4-assistant-shell.command-center-mode .jarvis-core-hint { left: calc(50% - 32px); top: calc(5% + 132px); font-size: 11px; }
+  .workspace-explorer-path-compact { font-size: 11px; }
+  .workspace-explorer-root { padding: 8px; }
   .v4-assistant-shell.command-center-mode:is([data-context-open="true"], [data-file-open="true"]) .command-panel-runtime {
     left: 16px; width: calc(54vw - 32px);
   }
-  .v4-assistant-shell .v4-context-drawer,
-  .workspace-file-editor { top: 108px; right: 16px; bottom: 16px; width: calc(46vw - 16px); }
+  .v4-assistant-shell .v4-context-drawer { top: 108px; right: 16px; bottom: 16px; width: calc(46vw - 16px); }
+  .workspace-file-editor { top: 108px; right: 16px; bottom: 16px; width: min(40vw, 560px); }
+  .v4-assistant-shell.command-center-mode[data-file-open="true"] .v4-context-drawer { right: 16px; width: calc(var(--work-side) * .375); }
+  /*
+    Narrow layout with a file open: the editor used to be anchored to the right edge,
+    so it sat on top of the Explorer drawer and made path/task context unclickable.
+    The editor is portaled to <body>, so it is not a descendant of the shell and must
+    be selected via the shell's own data-file-open state on <body>.
+  */
+  body:has(.v4-assistant-shell.command-center-mode[data-file-open="true"]) .workspace-file-editor {
+    left: calc(54vw - 4px);
+    right: calc(18vw + 24px);
+    width: auto;
+    min-width: 0;
+  }
   .v4-assistant-shell .jarvis-resume-next { flex-wrap: wrap; }
   .v4-assistant-shell .jarvis-resume-next-text { flex-basis: 100%; }
 }
@@ -9992,29 +10409,84 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%) scale(.28);
+  transform: translate(-50%, -50%) scale(.78);
+  z-index: 6;
+  pointer-events: none;
 }
-.v4-assistant-shell.command-center-mode .core-trigger { width: 260px; height: 260px; }
-.jarvis-core-hint { padding-left: 8px; font-size: 14px; }
+.v4-assistant-shell.command-center-mode .core-trigger {
+  width: 136px;
+  height: 136px;
+  transition: transform 140ms ease, filter 140ms ease;
+}
+.v4-assistant-shell.command-center-mode .core-trigger:hover { transform: scale(1.08); filter: brightness(1.12); }
+.v4-assistant-shell.command-center-mode .core-trigger:active { transform: scale(.97); }
+.v4-assistant-shell.command-center-mode .core-trigger:focus-visible { outline: 2px solid #e1e5ff; outline-offset: 4px; }
+.v4-assistant-shell.command-center-mode .jarvis-core-hint { display: block; }
+.jarvis-core-hint {
+  position: absolute;
+  left: calc(50% - 40px);
+  top: calc(8% + 164px);
+  transform: translateX(-50%);
+  padding: 7px 11px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 999px;
+  background: rgba(16,16,20,.88);
+  color: #c4c4ce;
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 6;
+}
 /* PiP has one invocation orb, a status row, and a separate request field. */
 .pip-mode .pip-presence {
   inset: 0;
   border: 1px solid #34343d;
   border-radius: 24px;
   background: #15151b;
+  pointer-events: auto;
+  -webkit-app-region: drag;
+  cursor: grab;
+  user-select: none;
 }
+.pip-mode .pip-presence:active { cursor: grabbing; }
+.pip-mode .pip-presence button,
+.pip-mode .pip-presence input,
+.pip-mode .pip-presence textarea,
+.pip-mode .pip-presence select,
+.pip-mode .pip-presence a,
+.pip-mode .pip-presence label,
+.pip-mode .pip-presence [contenteditable="true"],
+.pip-mode .pip-presence .jarvis-runtime-panel,
+.pip-mode .pip-presence .jarvis-runtime-panel * { -webkit-app-region: no-drag; }
+.pip-mode .pip-presence .pip-presence-copy { -webkit-app-region: no-drag; }
 .pip-mode .pip-presence-orb { position: absolute; top: 6px; width: 84px; height: 84px; }
 .pip-mode .pip-presence-orb-core { width: 44px; height: 44px; }
 .pip-mode .pip-presence-orb-ring { inset: 4px; }
 .pip-mode .pip-presence-orb-ring-b { inset: 14px; }
-.pip-mode .pip-presence-orb-trigger { width: 84px; height: 84px; }
-.pip-mode .pip-presence-copy { top: 92px; transform: translateX(-50%); gap: 5px; }
+.pip-mode .pip-presence-orb-trigger { width: 92px; height: 92px; cursor: pointer; }
+.pip-mode .pip-presence-orb-trigger:hover { background: radial-gradient(circle, rgba(255,255,255,.08), transparent 72%); }
+.pip-mode .pip-presence-orb-trigger:active { transform: scale(.96); }
+.pip-mode .pip-presence-orb-trigger:focus-visible { outline: 2px solid #e1e5ff; outline-offset: 2px; }
+.pip-mode .pip-presence-copy { top: 88px; transform: translateX(-50%); gap: 5px; }
+.pip-mode .pip-presence-main-hint { position: absolute; top: 122px; left: 50%; transform: translateX(-50%); color: #a6a6b0; font-size: 9px; white-space: nowrap; pointer-events: none; }
 .pip-mode .pip-presence-status { font-size: 12px; }
 .pip-mode .pip-presence-focus { display: none; }
 .pip-mode .pip-presence > .jarvis-runtime-panel { top: 142px; max-height: 62px; overflow: auto; }
-.pip-mode .pip-presence > .jarvis-runtime-panel.is-permission { top: 12px; max-height: 190px; }
-.pip-mode .pip-presence-open,
-.pip-mode .pip-presence-attention { top: auto; bottom: 54px; }
+.pip-mode .pip-presence[data-status="awaiting-confirmation"] .pip-presence-orb { top: 3px; width: 44px; height: 44px; z-index: 3; }
+.pip-mode .pip-presence[data-status="awaiting-confirmation"] .pip-presence-orb-core { width: 22px; height: 22px; }
+.pip-mode .pip-presence[data-status="awaiting-confirmation"] .pip-presence-orb-ring { inset: 1px; }
+.pip-mode .pip-presence[data-status="awaiting-confirmation"] .pip-presence-orb-ring-b { inset: 8px; }
+.pip-mode .pip-presence[data-status="awaiting-confirmation"] .pip-presence-orb-trigger { width: 44px; height: 44px; }
+.pip-mode .pip-presence[data-status="awaiting-confirmation"] .pip-presence-copy { display: none; }
+.pip-mode .pip-presence > .jarvis-runtime-panel.is-permission { top: 54px; left: 50%; transform: translateX(-50%); width: 244px; max-height: 214px; overflow: auto; }
+.pip-mode .pip-presence > .jarvis-runtime-panel.is-done,
+.pip-mode .pip-presence > .jarvis-runtime-panel.is-error { top: 150px; left: 50%; transform: translateX(-50%); width: 238px; max-height: 70px; overflow: auto; }
+.pip-mode .pip-presence > .jarvis-runtime-panel.is-done .jarvis-runtime-quiet-note,
+.pip-mode .pip-presence > .jarvis-runtime-panel.is-error .jarvis-runtime-quiet-note { max-height: 34px; overflow: hidden; }
+.pip-mode .pip-presence > .jarvis-runtime-panel.is-permission .jarvis-permission-file-destination code { display: none; }
+.pip-mode .pip-presence > .jarvis-runtime-panel.is-permission .jarvis-permission-actions button { min-height: 34px; }
+.pip-mode .pip-presence > .jarvis-runtime-panel.is-permission .jarvis-permission-link-option { font-size: 10px; }
+.pip-mode .pip-presence-ask { box-sizing: border-box; height: 36px; bottom: 12px; background: #23232b; }
 .pip-mode .pip-presence-ask { box-sizing: border-box; height: 36px; bottom: 12px; background: #23232b; }
 .v4-assistant-shell .jarvis-empty-guidance { margin: 12px 0 0; color: #bdbdc9; font-size: 14px; line-height: 1.8; }
 .v4-assistant-shell .jarvis-runtime-text { font-size: 15px; line-height: 1.8; }
@@ -10041,9 +10513,28 @@
   border-radius: 12px;
   background: #22222c;
   color: #e7e7f0;
-  cursor: pointer;
   pointer-events: auto;
 }
+.workspace-explorer-destination-choices { display: grid; gap: 7px; margin: 0; padding: 8px; border: 1px solid #575763; border-radius: 8px; }
+.workspace-explorer-destination-choices legend { padding: 0 4px; color: #f0e3b5; font-size: 11px; }
+.workspace-explorer-destination-choices label { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 3px 6px; align-items: start; color: #e1e1e8; font-size: 11px; cursor: pointer; }
+.workspace-explorer-destination-choices label input { grid-row: span 2; margin: 2px 0 0; }
+.workspace-explorer-destination-choices code { grid-column: 2; color: #a5a5b0; font: 10px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+.workspace-explorer-task-link:focus-visible { outline: 2px solid #e1e5ff; outline-offset: 3px; border-radius: 2px; }
+.pip-mode .pip-presence > .pip-presence-resume,
+.pip-mode .pip-presence > .pip-presence-error { pointer-events: none; cursor: default; }
+.pip-presence-resume:hover, .pip-presence-error:hover { border-color: inherit; background: inherit; }
+.v4-assistant-shell.command-center-mode .pip-interaction-zone { left: calc(50% - 40px); }
+.jarvis-core-hint { left: calc(50% - 40px); }
+.v4-assistant-shell.command-center-mode:is([data-context-open="true"], [data-file-open="true"]) .pip-interaction-zone,
+.v4-assistant-shell.command-center-mode:is([data-context-open="true"], [data-file-open="true"]) .jarvis-core-hint { left: calc((100vw - var(--work-side)) / 2); }
+.v4-assistant-shell.command-center-mode .core-container { top: 50%; }
+.v4-assistant-shell.command-center-mode .core-trigger { cursor: pointer; }
+.v4-assistant-shell.command-center-mode .core-trigger::after { content: ''; position: absolute; inset: -8px; border: 1px solid transparent; border-radius: 50%; transition: border-color 140ms ease, background-color 140ms ease; }
+.v4-assistant-shell.command-center-mode .core-trigger:hover::after { border-color: rgba(225,229,255,.32); background: rgba(225,229,255,.035); }
+.v4-assistant-shell.command-center-mode .pip-interaction-zone:has(.core-trigger:hover) + .jarvis-core-hint { color: #f2f2f7; border-color: rgba(225,229,255,.3); }
+.workspace-explorer-destination-choices label { min-height: 38px; }
+.workspace-explorer-create-form .workspace-explorer-destination-choices label input[type="radio"] { flex: none; width: 14px; height: 14px; min-width: 14px; margin: 2px 0 0; padding: 0; }
 .pip-result-button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .pip-result-button strong { font-size: 12px; }
 .pip-result-button:focus-visible { outline: 2px solid #d6dcff; outline-offset: 2px; }

@@ -32,6 +32,7 @@ export default function useJarvisFiles() {
   )
   const [roots, setRoots] = useState([])
   const [sections, setSections] = useState([])
+  const [rootDetails, setRootDetails] = useState([])
 
   const fetchSnapshot = useCallback(async () => {
     const api = window.jarvisDiscovery
@@ -85,6 +86,55 @@ export default function useJarvisFiles() {
     return fetchSnapshot()
   }, [fetchSnapshot])
 
+  useEffect(() => {
+    if (status !== 'ready' || !window.jarvisDiscovery?.listWorkspaceRoots) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const response = await window.jarvisDiscovery.listWorkspaceRoots()
+        if (!cancelled && response?.status === 'ok') {
+          setRootDetails(response.roots || [])
+        }
+      } catch {
+        // Files remain usable when friendly root labels are unavailable.
+      }
+    })()
+    return () => { cancelled = true }
+  }, [status, roots, sections])
+
+  const rootInfo = useCallback((rootId) => {
+    const detail = rootDetails.find((root) => root.id === rootId)
+    const section = sections.find((item) => item.root === rootId)
+    return {
+      id: rootId,
+      label: detail?.display_name || rootId || '',
+      absolutePath: detail?.device_path || section?.absolute_path || '',
+      available: detail?.available !== false,
+    }
+  }, [rootDetails, sections])
+
+  const fileLocation = useCallback((rootId, relativePath) => {
+    const root = rootInfo(rootId)
+    const normalized = String(relativePath || '').replace(/\\/g, '/')
+    const parts = normalized.split('/').filter(Boolean)
+    const folders = parts.slice(0, -1)
+    const absoluteRoot = root.absolutePath.replace(/[\\/]+$/, '')
+    const separator = absoluteRoot.includes('\\') ? '\\' : '/'
+    return {
+      ...root,
+      relativePath: normalized,
+      folders,
+      folderPath: folders.join('/'),
+      breadcrumb: [root.label, ...folders, parts.at(-1)].filter(Boolean),
+      absolutePath: absoluteRoot
+        ? `${absoluteRoot}${parts.length ? `${separator}${parts.join(separator)}` : ''}`
+        : '',
+      absoluteFolderPath: absoluteRoot
+        ? `${absoluteRoot}${folders.length ? `${separator}${folders.join(separator)}` : ''}`
+        : '',
+    }
+  }, [rootInfo])
+
   const readFile = useCallback(async (root, path) => {
     if (!window.jarvisDiscovery?.readFile) {
       return { status: 'error', error: '파일 읽기 API 없음 — Electron을 재시작하세요.' }
@@ -99,13 +149,41 @@ export default function useJarvisFiles() {
     return window.jarvisDiscovery.writeFile(rootId, fileId, path, content, revision)
   }, [])
 
+  /* FILE ACCESS 확장 — 승인된 루트 안에 새 텍스트 파일을 만든다(덮어쓰기 없음).
+     성공 시 스냅샷을 다시 읽어 FILES 목록에 즉시 반영한다. */
+  const createFile = useCallback(async (rootId, path, content = '') => {
+    if (!window.jarvisDiscovery?.fileCreate) {
+      return { status: 'error', error: '파일 생성 API 없음 — Electron을 재시작하세요.' }
+    }
+    const response = await window.jarvisDiscovery.fileCreate(rootId, path, content)
+    if (response?.status === 'ok') {
+      await fetchSnapshot()
+      return { ok: true, file: response }
+    }
+    return { ok: false, error: response?.error || '파일 생성에 실패했습니다' }
+  }, [fetchSnapshot])
+
+  /* FILE ACCESS 확장 — 절대 경로 텍스트 읽기(디스크 전체). 편집기는 아니고
+     읽기 전용 뷰어 용도 — 승인 루트 밖 파일도 읽을 수 있다. */
+  const readDiskFile = useCallback(async (path, maxChars) => {
+    if (!window.jarvisDiscovery?.diskRead) {
+      return { status: 'error', error: '디스크 읽기 API 없음 — Electron을 재시작하세요.' }
+    }
+    return window.jarvisDiscovery.diskRead(path, maxChars)
+  }, [])
+
   return {
     status,
     error,
     roots,
     sections,
+    rootDetails,
+    rootInfo,
+    fileLocation,
     refresh,
     readFile,
     writeFile,
+    createFile,
+    readDiskFile,
   }
 }

@@ -1,6 +1,4 @@
-import {
-  useState,
-} from 'react'
+import { useState } from 'react'
 
 import { RUNTIME_STATUS } from './useJarvisRuntime'
 import JarvisRuntimePanel from './JarvisRuntimePanel'
@@ -11,7 +9,7 @@ const PRESENCE_LABELS = {
   [RUNTIME_STATUS.TOOL_RUNNING]: '작업하는 중…',
   [RUNTIME_STATUS.AWAITING_CONFIRMATION]: '승인 필요',
   [RUNTIME_STATUS.DONE]: '응답 도착',
-  [RUNTIME_STATUS.ERROR]: '확인이 필요합니다',
+  [RUNTIME_STATUS.ERROR]: '오류 확인 필요',
 }
 
 function PresenceOrb({ status, onOpen }) {
@@ -25,20 +23,13 @@ function PresenceOrb({ status, onOpen }) {
         className="pip-presence-orb-trigger"
         onClick={onOpen}
         aria-label="Open JARVIS Assistant"
+        title="Core를 눌러 Main으로 돌아가기"
       />
     </div>
   )
 }
 
-/*
-  UX 피드백(2·3번) — PiP가 곧 assistant다.
-
-  PiP에서도 질문이 가능해야 "core로 전환해야 계속 일할 수 있는" 느낌이
-  사라진다. orb(확장) 아래에 mini composer를 띄워 짧은 요청은 PiP에서
-  끝내고, 긴 답/파일 작업만 Main으로 확장한다. 요청을 보내면 자동으로
-  Assistant로 확장한다 — 답을 볼 곳이 필요하기 때문이다.
-*/
-function PipAsk({ runtime, onOpen }) {
+function PipAsk({ runtime }) {
   const [text, setText] = useState('')
   const busy =
     runtime.status === RUNTIME_STATUS.THINKING ||
@@ -51,7 +42,6 @@ function PipAsk({ runtime, onOpen }) {
     if (!trimmed || (busy && runtime.pendingSubmit)) return
     runtime.submitOrQueue(trimmed, runtime.projectId)
     setText('')
-    onOpen()
   }
 
   return (
@@ -74,48 +64,16 @@ function PipAsk({ runtime, onOpen }) {
   )
 }
 
-export default function QuickPip({
-  executionContext,
-  runtime,
-  pipMode = false,
-  onOpen,
-}) {
-  if (!pipMode) {
-    return null
-  }
+export default function QuickPip({ executionContext, runtime, pipMode = false, onOpen }) {
+  if (!pipMode) return null
 
   const status = runtime.status
   const focusLabel = executionContext?.node?.label
   const label = PRESENCE_LABELS[status] || 'JARVIS'
-
-  if (status === RUNTIME_STATUS.AWAITING_CONFIRMATION) {
-    return (
-      <aside className="quick-pip pip-presence" aria-label="JARVIS presence">
-        <JarvisRuntimePanel
-          runtime={runtime}
-          onApprove={runtime.approve}
-          onReject={runtime.reject}
-          onDismiss={runtime.dismiss}
-          variant="quiet"
-          pipMode
-        />
-        <button
-          type="button"
-          className="pip-presence-open"
-          onClick={onOpen}
-        >
-          Open Assistant
-        </button>
-      </aside>
-    )
-  }
+  const needsRuntimePanel = status !== RUNTIME_STATUS.IDLE && status !== RUNTIME_STATUS.THINKING && status !== RUNTIME_STATUS.TOOL_RUNNING
 
   return (
-    <aside
-      className="quick-pip pip-presence"
-      aria-label="JARVIS presence"
-      data-status={status}
-    >
+    <aside className="quick-pip pip-presence" aria-label="JARVIS presence" data-status={status}>
       <PresenceOrb status={status} onOpen={onOpen} />
       <div className="pip-presence-copy" aria-live="polite">
         <span className="pip-presence-name">JARVIS</span>
@@ -128,23 +86,24 @@ export default function QuickPip({
         )}
       </div>
 
-      <PipAsk runtime={runtime} onOpen={onOpen} />
-
-      {status === RUNTIME_STATUS.DONE && (
-        <button type="button" className="pip-result-button" onClick={onOpen}>
-          <span>{runtime.text || '요청을 처리했습니다.'}</span>
-          <strong>응답 보기 →</strong>
-        </button>
+      {needsRuntimePanel && (
+        <JarvisRuntimePanel
+          runtime={runtime}
+          onApprove={runtime.approve}
+          onApproveAndLink={runtime.approveAndLinkFile}
+          onReject={runtime.reject}
+          onDismiss={runtime.dismiss}
+          variant="quiet"
+          pipMode
+        />
       )}
+      {status !== RUNTIME_STATUS.AWAITING_CONFIRMATION && <PipAsk runtime={runtime} />}
 
-      {status === RUNTIME_STATUS.ERROR && (
-        <button
-          type="button"
-          className="pip-presence-attention"
-          onClick={onOpen}
-        >
-          Open Assistant
-        </button>
+      {status === RUNTIME_STATUS.IDLE && (
+        <span className="pip-presence-main-hint" aria-hidden="true">Orb를 눌러 Main 열기</span>
+      )}
+      {(status === RUNTIME_STATUS.THINKING || status === RUNTIME_STATUS.TOOL_RUNNING) && (
+        <span className="pip-presence-main-hint" aria-live="polite">{label}</span>
       )}
     </aside>
   )

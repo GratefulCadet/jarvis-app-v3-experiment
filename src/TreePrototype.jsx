@@ -12,17 +12,27 @@ import {
 
 import {
   ArrowLeft,
+  Check,
   ChevronDown,
   ChevronRight,
+  Circle,
+  Crosshair,
   Folder,
   FolderPlus,
+  Home,
+  Link2,
   Map as MapIcon,
   Maximize2,
   Network,
+  Pencil,
+  Pin,
+  PinOff,
+  Play,
   Plus,
   RefreshCw,
   Search,
   Settings,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react'
@@ -138,6 +148,13 @@ const readExpandedTreeIds = () => {
   }
 }
 
+const createDraft = (node) => ({
+  nodeId: node.id,
+  label: node.label,
+  description: node.description,
+  type: node.type,
+})
+
 /*
   FILES 섹션 행 — bridge files_snapshot의 평탄 entry를 TreeMapRows shape으로.
   blocked(민감 차단) 항목은 이름만 노출(내용 없음)하고 접두어로 표시한다.
@@ -236,6 +253,7 @@ function TreeMapRows({
         <div
           key={node.id}
           className="tree-prototype-map-row"
+          data-task-id={node.id}
           style={{
             '--map-depth': depth,
           }}
@@ -311,6 +329,8 @@ function TreeMapRows({
 }
 
 export default function TreePrototype({
+  onOpenExecution,
+  onFocusTask,
   executionContext,
   runtime,
   fileEditor,
@@ -369,6 +389,7 @@ export default function TreePrototype({
 
   const [
     pinnedNodeIds,
+    setPinnedNodeIds,
   ] = useState(
     readPinnedShortcuts,
   )
@@ -391,6 +412,14 @@ export default function TreePrototype({
 
     return initial
   })
+
+  const [expandedDirs, setExpandedDirs] = useState(() => new Set())
+  const [focusedLinkedTask, setFocusedLinkedTask] = useState(null)
+  const taskFocusRequestRef = useRef(0)
+  const lastScrolledTaskRequestRef = useRef(null)
+
+  const [askText, setAskText] =
+    useState('')
 
   const [
     previewNodeId,
@@ -508,6 +537,29 @@ export default function TreePrototype({
       ),
     [taskTree.root],
   )
+
+  const flatNodeMap = useMemo(
+    () =>
+      new Map(
+        flatNodes.map((entry) => [
+          entry.node.id,
+          entry,
+        ]),
+      ),
+    [flatNodes],
+  )
+
+  const pinnedNodes =
+    pinnedNodeIds
+      .map((nodeId) =>
+        flatNodeMap.get(nodeId),
+      )
+      .filter(Boolean)
+
+  const isCurrentPinned =
+    pinnedNodeIds.includes(
+      node.id,
+    )
 
   useEffect(() => {
     try {
@@ -721,6 +773,15 @@ export default function TreePrototype({
         )
       : treeRows
 
+  useEffect(() => {
+    if (!focusedLinkedTask || lastScrolledTaskRequestRef.current === focusedLinkedTask.request) return
+    const row = Array.from(document.querySelectorAll('.tree-prototype-overview-list [data-task-id]'))
+      .find((element) => element.dataset.taskId === focusedLinkedTask.id)
+    if (!row) return
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    lastScrolledTaskRequestRef.current = focusedLinkedTask.request
+  }, [focusedLinkedTask, expandedNodeIds, searchText])
+
   const toggleExpanded = (
     nodeId,
   ) => {
@@ -742,6 +803,19 @@ export default function TreePrototype({
   }
 
   const [
+    editDraftState,
+    setEditDraft,
+  ] = useState(() =>
+    createDraft(node),
+  )
+
+  const editDraft =
+    editDraftState.nodeId ===
+    node.id
+      ? editDraftState
+      : createDraft(node)
+
+  const [
     addDraft,
     setAddDraft,
   ] = useState(
@@ -752,15 +826,91 @@ export default function TreePrototype({
 
   const [addBusy, setAddBusy] = useState(false)
 
+  /* RESOURCE LINK V1 (PART I) — files 뷰 파일 노드 → Project 명시적 링크.
+     사용자가 Project·relation을 직접 고른다. 실패 시 오류만 보이고 트리는
+     그대로 — 성공 시 useJarvisTree.linkProjectFile이 canonical snapshot을
+     다시 읽어 Project Resources에 나타난다. */
+  const [linkDraft, setLinkDraft] = useState({
+    fileId: null,
+    fileLabel: '',
+    targetType: 'project',
+    projectId: '',
+    taskId: '',
+    relation: 'reference',
+  })
+
+  const [linkError, setLinkError] = useState(null)
+
+  const [linkBusy, setLinkBusy] = useState(false)
+
   const [unlinkBusy, setUnlinkBusy] = useState(false)
   const [unlinkError, setUnlinkError] = useState(null)
+
+  /* PROJECT PRIMARY WORKSPACE V1 — Project → 논리 WorkspaceRoot 관계. */
+  const [wsDraft, setWsDraft] = useState({ rootId: '' })
+  const [wsError, setWsError] = useState(null)
+  const [wsBusy, setWsBusy] = useState(false)
 
   /* WORKSPACE REGISTRATION — extracted to useWorkspaceRoots hook */
   const ws = useWorkspaceRoots({ taskTree, files })
 
+  const handleConnectFolder = async () => {
+    if (wsBusy) return
+    if (node.type !== 'project') {
+      setWsError('Project 노드에서만 연결할 수 있습니다.')
+      return
+    }
+    setWsBusy(true)
+    setWsError(null)
+    try {
+      const picked = await taskTree.pickFolder()
+      if (!picked || !picked.ok) {
+        setWsError(picked?.error || '폴더 선택에 실패했습니다')
+        return
+      }
+      if (picked.cancelled) return
+      const result = await taskTree.connectProjectWorkspace({
+        projectId: node.id,
+        devicePath: picked.path,
+      })
+      if (!result || !result.ok) {
+        setWsError(result?.error || '프로젝트 연결에 실패했습니다')
+        return
+      }
+      const refreshResult = await files.refresh()
+      if (refreshResult && !refreshResult.ok) {
+        setWsError('프로젝트 연결은 완료되었으나 파일 뷰 새로고침에 실패했습니다. 새로고침 버튼을 눌러주세요.')
+      }
+      setWsDraft({ rootId: '' })
+      setActivePopover(null)
+    } catch (exception) {
+      setWsError(String(exception?.message || exception))
+    } finally {
+      setWsBusy(false)
+    }
+  }
+
   const handleAddFolder = ws.handleAddFolder
   const handleReconnectRoot = ws.handleReconnectRoot
   const handleRemoveRoot = ws.handleRemoveRoot
+
+  const openLinkPopover = (fileId, fileLabel) => {
+    setLinkDraft({
+      fileId,
+      fileLabel: fileLabel || '',
+      targetType: 'project',
+      projectId: '',
+      taskId: '',
+      relation: 'reference',
+    })
+    setLinkError(null)
+    setActivePopover('link')
+  }
+
+  const [toggleError, setToggleError] = useState(null)
+
+  const [toggleBusy, setToggleBusy] = useState(false)
+  const [editError, setEditError] = useState(null)
 
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState(null)
@@ -794,6 +944,54 @@ export default function TreePrototype({
       )
     }
   }, [activePopover])
+
+  const updateEditDraft = (
+    patch,
+  ) => {
+    setEditDraft(
+      (draft) => ({
+        ...(draft.nodeId ===
+        node.id
+          ? draft
+          : createDraft(node)),
+        ...patch,
+      }),
+    )
+  }
+
+  const saveCurrentNode = async (
+    event,
+  ) => {
+    event.preventDefault()
+
+    // Canonical Task Edit — persist through TaskStore via bridge
+    if (node.type === 'task' && node.id && node.id.startsWith('t-')) {
+      const projectId = node.parent_id || node.projectId
+      if (projectId) {
+        const result = await taskTree.editTask({
+          projectId,
+          taskId: node.id,
+          title: editDraft.label || undefined,
+          reason: editDraft.description !== undefined ? editDraft.description : undefined,
+        })
+        if (!result?.ok) {
+          setEditError(result?.error || 'Task 편집에 실패했습니다')
+          return
+        }
+        setEditError(null)
+        setActivePopover(null)
+        return
+      }
+    }
+
+    // Non-task nodes remain renderer-local
+    taskTree.updateNode(
+      node.id,
+      editDraft,
+    )
+
+    setActivePopover(null)
+  }
 
   const addChild = async (event) => {
     event.preventDefault()
@@ -895,6 +1093,122 @@ export default function TreePrototype({
       setUnlinkBusy(false)
     }
   }
+  const linkCurrentFile = async (event) => {
+    event.preventDefault()
+
+    if (!linkDraft.fileId) {
+      setLinkError('stable FileRef identity가 없어 링크할 수 없습니다.')
+      return
+    }
+
+    const targetId = linkDraft.targetType === 'task'
+      ? (typeof linkDraft.taskId === 'string' ? linkDraft.taskId.trim() : '')
+      : (typeof linkDraft.projectId === 'string' ? linkDraft.projectId.trim() : '')
+    if (!targetId) {
+      setLinkError(linkDraft.targetType === 'task' ? 'Task를 선택하세요.' : '프로젝트를 선택하세요.')
+      return
+    }
+
+    setLinkBusy(true)
+    setLinkError(null)
+
+    try {
+      const result = linkDraft.targetType === 'task'
+        ? await taskTree.linkTaskFile({
+          taskId: targetId,
+          fileId: linkDraft.fileId,
+          relation: linkDraft.relation,
+        })
+        : await taskTree.linkProjectFile({
+          projectId: targetId,
+          fileId: linkDraft.fileId,
+          relation: linkDraft.relation,
+        })
+
+      if (!result || !result.ok) {
+        setLinkError(result?.error || '링크 생성에 실패했습니다')
+        return
+      }
+
+      setLinkDraft({
+        fileId: null,
+        fileLabel: '',
+        targetType: 'project',
+        projectId: '',
+        taskId: '',
+        relation: 'reference',
+      })
+      setActivePopover(null)
+    } catch (exception) {
+      setLinkError(String(exception?.message || exception))
+    } finally {
+      setLinkBusy(false)
+    }
+  }
+
+  /* PROJECT PRIMARY WORKSPACE V1 — Project 노드의 명시적 workspace 설정.
+     canonical write 후 snapshot 재조회가 Workspace 노드를 갱신한다.
+     Workspace 노드에서는 해제(clear)도 가능하다 — 메타데이터만 제거. */
+  const saveWorkspace = async (event) => {
+    event.preventDefault()
+
+    if (wsBusy) return
+
+    if (node.type !== 'project') {
+      setWsError('Project 노드에서만 설정할 수 있습니다.')
+      return
+    }
+
+    const rootId = typeof wsDraft.rootId === 'string' ? wsDraft.rootId.trim() : ''
+    if (!rootId) {
+      setWsError('workspace 루트를 선택하세요.')
+      return
+    }
+
+    setWsBusy(true)
+    setWsError(null)
+
+    try {
+      const result = await taskTree.setProjectWorkspace({
+        projectId: node.id,
+        rootId,
+      })
+
+      if (!result || !result.ok) {
+        setWsError(result?.error || 'workspace 설정에 실패했습니다')
+        return
+      }
+
+      setWsDraft({ rootId: '' })
+      setActivePopover(null)
+    } catch (exception) {
+      setWsError(String(exception?.message || exception))
+    } finally {
+      setWsBusy(false)
+    }
+  }
+
+  const clearWorkspace = async () => {
+    if (wsBusy) return
+    if (node.type !== 'project') return
+
+    setWsBusy(true)
+    setWsError(null)
+
+    try {
+      const result = await taskTree.clearProjectWorkspace({ projectId: node.id })
+      if (!result || !result.ok) {
+        setWsError(result?.error || 'workspace 해제에 실패했습니다')
+        return
+      }
+      setWsDraft({ rootId: '' })
+      setActivePopover(null)
+    } catch (exception) {
+      setWsError(String(exception?.message || exception))
+    } finally {
+      setWsBusy(false)
+    }
+  }
 
   const deleteCurrentNode = async () => {
     // Canonical Task Delete — destructive write through TaskStore via bridge.
@@ -941,6 +1255,69 @@ export default function TreePrototype({
       setDialog('delete')
       setActivePopover(null)
     }
+
+  const toggleCurrentPin = () => {
+    setPinnedNodeIds(
+      (nodeIds) => {
+        if (
+          nodeIds.includes(
+            node.id,
+          )
+        ) {
+          return nodeIds.filter(
+            (nodeId) =>
+              nodeId !== node.id,
+          )
+        }
+
+        return [
+          node.id,
+          ...nodeIds,
+        ].slice(0, 6)
+      },
+    )
+  }
+
+  const executeCurrentNode = () => {
+    onOpenExecution({
+      node,
+      path,
+    })
+  }
+
+  /*
+    Dock의 Ask JARVIS — execution이 아니어도 AI 입력을 받는다.
+    Permission Gate가 걸리면 App이 자동으로 PiP 승인 화면으로 전환한다.
+  */
+  const askBusy =
+    runtime?.status === 'thinking' ||
+    runtime?.status === 'tool-running' ||
+    runtime?.status ===
+      'awaiting-confirmation'
+
+  const handleAskSubmit = (
+    event,
+  ) => {
+    event.preventDefault()
+
+    if (!runtime) {
+      return
+    }
+
+    const trimmed =
+      askText.trim()
+
+    if (!trimmed || askBusy) {
+      return
+    }
+
+    runtime.submit(
+      trimmed,
+      runtime.projectId,
+    )
+
+    setAskText('')
+  }
 
   const handleCarouselWheel = (
     event,
@@ -1026,6 +1403,30 @@ export default function TreePrototype({
     currentProject?.children?.find((child) => child.type === 'workspace_group')?.children?.[0] || null
   const currentTasks =
     currentProject?.children?.filter((child) => child.type === 'task') || []
+
+  const allTasks = flatNodes
+    .map((entry) => entry.node)
+    .filter((treeNode) => treeNode.type === 'task')
+
+  const handleFocusLinkedTask = (taskId) => {
+    const destination = taskTree.find(taskId)
+    if (!destination) return
+    setSearchText('')
+    goToNode(taskId)
+    taskFocusRequestRef.current += 1
+    setFocusedLinkedTask({ id: taskId, request: taskFocusRequestRef.current })
+    onFocusTask?.(destination)
+  }
+
+  const toggleFileDir = (entryPath) => {
+    setExpandedDirs((previous) => {
+      const next = new Set(previous)
+      const key = `dir:${entryPath}`
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   const [
     toneRed,
@@ -1628,37 +2029,6 @@ export default function TreePrototype({
           />
           WORK
 
-          <span className="tree-prototype-header-actions">
-            <button
-              type="button"
-              className="tree-prototype-header-btn"
-              onClick={() => setActivePopover('add')}
-              aria-label="Add task under current selection"
-              title="작업 추가 (선택한 프로젝트 아래)"
-            >
-              <Plus size={12} strokeWidth={2} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="tree-prototype-header-btn"
-              onClick={() => ws.setSettingsOpen(true)}
-              aria-label="Workspace settings"
-              title="작업 공간(폴더) 연결 관리"
-            >
-              <Settings size={12} strokeWidth={2} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="tree-prototype-header-btn"
-              onClick={requestDeleteCurrentNode}
-              disabled={node.id === taskTree.root.id}
-              aria-label="Delete current node"
-              title="선택한 노드 삭제"
-            >
-              <Trash2 size={12} strokeWidth={2} aria-hidden="true" />
-            </button>
-          </span>
-
           <button
             type="button"
             className="tree-prototype-overview-expand"
@@ -1698,6 +2068,7 @@ export default function TreePrototype({
             currentProject={currentProject}
             currentWorkspace={currentWorkspace}
             currentTasks={currentTasks}
+            allTasks={allTasks}
             focusLabel={focusLabel}
             visibleRows={visibleRows}
             currentNodeId={node.id}
@@ -1728,7 +2099,17 @@ export default function TreePrototype({
             files={files}
             handleAddFolder={handleAddFolder}
             makeFileRow={makeFileRow}
+            openLinkPopover={openLinkPopover}
             openFile={setFileEditor}
+            activeFile={fileEditor}
+            executionContext={executionContext}
+            expandedDirs={expandedDirs}
+            onToggleDir={toggleFileDir}
+            onFocusTask={handleFocusLinkedTask}
+            executionContext={executionContext}
+            expandedDirs={expandedDirs}
+            onToggleDir={toggleFileDir}
+            onFocusTask={handleFocusLinkedTask}
           />
         </div>
       </aside>
@@ -1742,60 +2123,1020 @@ export default function TreePrototype({
         />
       )}
 
+      <nav
+        className="tree-prototype-dock"
+        aria-label="JARVIS tree actions"
+        ref={popoverRef}
+      >
+        <button
+          type="button"
+          aria-label="Go to system home"
+          onClick={() =>
+            goToNode(
+              taskTree.root.id,
+            )
+          }
+        >
+          <Home
+            size={21}
+            aria-hidden="true"
+          />
+          <span>Home</span>
+        </button>
 
-      <AnimatePresence>
-        {/*
-          UX 정리 — dock 제거 후 Add Task popover. drawer 헤더의 + 버튼이 연다.
-          위치는 CSS(.v4-context-drawer .tree-prototype-popover)가 잡는다.
-        */}
-        {activePopover === 'add' && (
-          <motion.form
-            key="add-popover"
-            className="tree-prototype-popover tree-prototype-add-form"
-            initial={{ opacity: 0, y: 12, scale: 0.94 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.96 }}
-            transition={{ type: 'spring', bounce: 0.08, duration: 0.18 }}
-            onPointerDown={(event) => event.stopPropagation()}
-            onSubmit={addChild}
-          >
-            <div className="tree-prototype-editor-title">
-              <Plus size={12} strokeWidth={1.8} aria-hidden="true" />
-              NEW TASK
-            </div>
+        <button
+          type="button"
+          aria-label="Go to parent"
+          disabled={!parent}
+          onClick={() =>
+            parent &&
+            goToNode(
+              parent.id,
+            )
+          }
+        >
+          <ArrowLeft
+            size={21}
+            aria-hidden="true"
+          />
+          <span>Back</span>
+        </button>
 
-            <input
-              type="text"
-              value={addDraft.label}
-              onChange={(event) => setAddDraft((current) => ({ ...current, label: event.target.value }))}
-              placeholder="작업 제목"
-              aria-label="New task title"
-              autoFocus
+        <button
+          type="button"
+          aria-label="Edit current node"
+          className={
+            activePopover === 'edit'
+              ? 'is-active'
+              : ''
+          }
+          onClick={(event) => {
+            event.stopPropagation()
+
+            setActivePopover(
+              activePopover === 'edit'
+                ? null
+                : 'edit',
+            )
+          }}
+        >
+          <Pencil
+            size={21}
+            aria-hidden="true"
+          />
+          <span>Edit</span>
+        </button>
+
+        <button
+          type="button"
+          aria-label="Add child node"
+          className={
+            activePopover === 'add'
+              ? 'is-active'
+              : ''
+          }
+          onClick={(event) => {
+            event.stopPropagation()
+
+            setActivePopover(
+              activePopover === 'add'
+                ? null
+                : 'add',
+            )
+          }}
+        >
+          <Plus
+            size={21}
+            aria-hidden="true"
+          />
+          <span>Add</span>
+        </button>
+
+        <button
+          type="button"
+          aria-label={
+            isCurrentPinned
+              ? 'Unpin current node'
+              : 'Pin current node'
+          }
+          className={
+            isCurrentPinned
+              ? 'is-active'
+              : ''
+          }
+          onClick={
+            toggleCurrentPin
+          }
+        >
+          {isCurrentPinned ? (
+            <PinOff
+              size={21}
+              aria-hidden="true"
             />
-
-            <textarea
-              value={addDraft.description}
-              onChange={(event) => setAddDraft((current) => ({ ...current, description: event.target.value }))}
-              placeholder="설명 (선택)"
-              aria-label="New task description"
+          ) : (
+            <Pin
+              size={21}
+              aria-hidden="true"
             />
+          )}
 
-            <div className="tree-prototype-editor-actions">
-              <button type="submit" disabled={addBusy || !String(addDraft.label || '').trim()}>
-                {addBusy ? '추가 중…' : 'ADD'}
-              </button>
-              <button type="button" onClick={() => setActivePopover(null)}>
-                CANCEL
-              </button>
+          <span>
+            {isCurrentPinned
+              ? 'Unpin'
+              : 'Pin'}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          aria-label="Link current file to project"
+          className={
+            activePopover === 'link'
+              ? 'is-active'
+              : ''
+          }
+          onClick={(event) => {
+            event.stopPropagation()
+
+            if (activePopover === 'link') {
+              setActivePopover(null)
+              return
+            }
+
+            // files 뷰의 파일 행에서 열린 초대 플로우 — fileId가 이미 채워져 있다.
+            // 그 외 위치에서의 수동 실행은 초대 상태를 리셋한다(placeholder 표시).
+            if (node.type === 'file' && node.fileId) {
+              openLinkPopover(node.fileId, node.label)
+            } else {
+              setLinkDraft({
+                fileId: null,
+                fileLabel: '',
+                targetType: 'project',
+                projectId: '',
+                taskId: '',
+                relation: 'reference',
+              })
+              setLinkError('FILES 뷰에서 파일 행의 링크 버튼을 먼저 눌러주세요.')
+              setActivePopover('link')
+            }
+          }}
+        >
+          <Link2
+            size={21}
+            aria-hidden="true"
+          />
+          <span>Link</span>
+        </button>
+
+        <button
+          type="button"
+          aria-label="Set primary workspace"
+          className={
+            activePopover === 'workspace'
+              ? 'is-active'
+              : ''
+          }
+          disabled={node.type !== 'project'}
+          onClick={(event) => {
+            event.stopPropagation()
+            const currentWs =
+              node.type === 'project'
+                ? (node.children || []).find(
+                    (child) => child.type === 'workspace_group',
+                  )
+                : null
+            const currentRoot = currentWs?.children?.[0]?.rootId || ''
+            setWsDraft({ rootId: currentRoot })
+            setWsError(null)
+            setActivePopover(
+              activePopover === 'workspace'
+                ? null
+                : 'workspace',
+            )
+          }}
+        >
+          <MapIcon size={21} aria-hidden="true" />
+          <span>WS</span>
+        </button>
+
+        <button
+          type="button"
+          aria-label="Workspace settings"
+          className={ws.settingsOpen ? 'is-active' : ''}
+          onClick={(event) => {
+            event.stopPropagation()
+            ws.setSettingsOpen((prev) => !prev)
+          }}
+        >
+          <Settings size={21} aria-hidden="true" />
+          <span>Settings</span>
+        </button>
+
+        <button
+          type="button"
+          aria-label="Search system map"
+          className={
+            activePopover ===
+            'search'
+              ? 'is-active'
+              : ''
+          }
+          onClick={(event) => {
+            event.stopPropagation()
+
+            setActivePopover(
+              activePopover ===
+              'search'
+                ? null
+                : 'search',
+            )
+          }}
+        >
+          <Search
+            size={21}
+            aria-hidden="true"
+          />
+          <span>Search</span>
+        </button>
+
+        <button
+          type="button"
+          aria-label="Ask JARVIS"
+          className={
+            activePopover === 'ask'
+              ? 'is-active'
+              : ''
+          }
+          onClick={(event) => {
+            event.stopPropagation()
+
+            setActivePopover(
+              activePopover === 'ask'
+                ? null
+                : 'ask',
+            )
+          }}
+        >
+          <Sparkles
+            size={21}
+            aria-hidden="true"
+          />
+          <span>Ask</span>
+        </button>
+
+        <button
+          type="button"
+          aria-label="Open execution"
+          onClick={
+            executeCurrentNode
+          }
+        >
+          <Play
+            size={21}
+            fill="currentColor"
+            aria-hidden="true"
+          />
+          <span>Run</span>
+        </button>
+
+        {pinnedNodes.map(
+          (entry) => (
+            <button
+              type="button"
+              key={entry.node.id}
+              aria-label={`Open ${entry.node.label}`}
+              className={
+                path.some(
+                  (pathNode) =>
+                    pathNode.id ===
+                    entry.node.id,
+                )
+                  ? 'is-active'
+                  : ''
+              }
+              onClick={() =>
+                goToNode(
+                  entry.node.id,
+                )
+              }
+            >
+              <Crosshair
+                size={21}
+                aria-hidden="true"
+              />
+              <span>
+                {
+                  entry.node
+                    .label
+                }
+              </span>
+            </button>
+          ),
+        )}
+
+        <AnimatePresence>
+          {activePopover ===
+            'search' && (
+            <motion.div
+              key="search-popover"
+              className="tree-prototype-popover tree-prototype-dock-search"
+              initial={{
+                opacity: 0,
+                y: 12,
+                scale: 0.94,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                scale: 1,
+              }}
+              exit={{
+                opacity: 0,
+                y: 10,
+                scale: 0.96,
+              }}
+              transition={{
+                type: 'spring',
+                bounce: 0.08,
+                duration: 0.18,
+              }}
+              onPointerDown={(
+                event,
+              ) =>
+                event.stopPropagation()
+              }
+            >
+              <Search
+                size={13}
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                value={
+                  searchText
+                }
+                placeholder="Search node"
+                onChange={(
+                  event,
+                ) =>
+                  setSearchText(
+                    event.target
+                      .value,
+                  )
+                }
+                aria-label="Search tree nodes from dock"
+                autoFocus
+              />
+            </motion.div>
+          )}
+
+          {activePopover ===
+            'ask' && (
+            <motion.form
+              key="ask-popover"
+              className="tree-prototype-popover tree-prototype-ask-form"
+              initial={{
+                opacity: 0,
+                y: 12,
+                scale: 0.94,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                scale: 1,
+              }}
+              exit={{
+                opacity: 0,
+                y: 10,
+                scale: 0.96,
+              }}
+              transition={{
+                type: 'spring',
+                bounce: 0.08,
+                duration: 0.18,
+              }}
+              onPointerDown={(
+                event,
+              ) =>
+                event.stopPropagation()
+              }
+              onSubmit={handleAskSubmit}
+            >
+              <div className="tree-prototype-editor-title">
+                <Sparkles
+                  size={12}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
+                ASK JARVIS
+              </div>
+
+              <input
+                type="text"
+                value={askText}
+                placeholder="무엇이든 물어보세요…"
+                onChange={(event) =>
+                  setAskText(
+                    event.target.value,
+                  )
+                }
+                aria-label="Ask JARVIS from dock"
+                disabled={askBusy}
+                autoFocus
+              />
+
+              <div className="tree-prototype-ask-row">
+                <button
+                  type="submit"
+                  disabled={
+                    !askText.trim() ||
+                    askBusy
+                  }
+                >
+                  ASK
+                </button>
+              </div>
+
+              {askBusy && (
+                <div className="tree-prototype-ask-status">
+                  {runtime?.status ===
+                  'tool-running'
+                    ? '승인된 작업 실행 중…'
+                    : runtime?.status ===
+                        'awaiting-confirmation'
+                      ? '승인이 필요합니다 — Assistant에서 확인하세요'
+                      : 'Thinking…'}
+                </div>
+              )}
+
+              {!askBusy &&
+                runtime?.status ===
+                  'done' &&
+                runtime.text && (
+                <div className="tree-prototype-ask-answer">
+                  {runtime.text}
+                </div>
+              )}
+
+              {!askBusy &&
+                runtime?.status ===
+                  'error' && (
+                <div className="tree-prototype-ask-error">
+                  {runtime.error ||
+                    '오류가 발생했습니다'}
+                </div>
+              )}
+            </motion.form>
+          )}
+
+          {activePopover ===
+            'edit' && (
+            <motion.form
+              key="edit-popover"
+              className="tree-prototype-popover tree-prototype-edit-form"
+              initial={{
+                opacity: 0,
+                y: 12,
+                scale: 0.94,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                scale: 1,
+              }}
+              exit={{
+                opacity: 0,
+                y: 10,
+                scale: 0.96,
+              }}
+              transition={{
+                type: 'spring',
+                bounce: 0.08,
+                duration: 0.03,
+              }}
+              onSubmit={
+                saveCurrentNode
+              }
+            >
+              <div className="tree-prototype-editor-title">
+                <Pencil
+                  size={12}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
+                CURRENT NODE
+              </div>
+
+              <input
+                type="text"
+                value={
+                  editDraft.label
+                }
+                onChange={(
+                  event,
+                ) =>
+                  updateEditDraft({
+                    label:
+                      event.target
+                        .value,
+                  })
+                }
+                aria-label="Current node title"
+              />
+
+              <textarea
+                value={
+                  editDraft.description
+                }
+                onChange={(
+                  event,
+                ) =>
+                  updateEditDraft({
+                    description:
+                      event.target
+                        .value,
+                  })
+                }
+                aria-label="Current node description"
+              />
+
+              <select
+                value={
+                  editDraft.type
+                }
+                onChange={(
+                  event,
+                ) =>
+                  updateEditDraft({
+                    type:
+                      event.target
+                        .value,
+                  })
+                }
+                aria-label="Current node type"
+              >
+                {TASK_NODE_TYPES.map(
+                  (type) => (
+                    <option
+                      key={type}
+                      value={type}
+                    >
+                      {type}
+                    </option>
+                  ),
+                )}
+              </select>
+
+              <div className="tree-prototype-editor-actions">
+                <button type="submit">
+                  SAVE
+                </button>
+
+                {editError && (
+                  <div className="tree-prototype-add-error" role="alert">
+                    {editError}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  disabled={toggleBusy}
+                  onClick={async () => {
+                    if (toggleBusy) return
+                    setToggleBusy(true)
+                    setToggleError(null)
+                    try {
+                      const result = await taskTree.toggleComplete(node.id)
+                      if (!result || !result.ok) {
+                        setToggleError(result?.error || 'Task 상태 변경에 실패했습니다')
+                      }
+                    } catch (exception) {
+                      setToggleError(String(exception?.message || exception))
+                    } finally {
+                      setToggleBusy(false)
+                    }
+                  }}
+                >
+                  {toggleBusy ? (
+                    <Circle
+                      size={12}
+                      aria-hidden="true"
+                    />
+                  ) : node.complete ? (
+                    <Check
+                      size={12}
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <Circle
+                      size={12}
+                      aria-hidden="true"
+                    />
+                  )}
+
+                  {toggleBusy ? '처리 중…' : node.complete ? 'DONE' : 'MARK'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={
+                    requestDeleteCurrentNode
+                  }
+                  disabled={
+                    node.id ===
+                    taskTree.root.id
+                  }
+                >
+                  <Trash2
+                    size={12}
+                    aria-hidden="true"
+                  />
+                  DELETE
+                </button>
+              </div>
+
+              {toggleError && (
+                <div className="tree-prototype-add-error" role="alert">
+                  {toggleError}
+                </div>
+              )}
+            </motion.form>
+          )}
+
+          {activePopover ===
+            'add' && (
+            <motion.form
+              key="add-popover"
+              className="tree-prototype-popover tree-prototype-add-form"
+              initial={{
+                opacity: 0,
+                y: 12,
+                scale: 0.94,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                scale: 1,
+              }}
+              exit={{
+                opacity: 0,
+                y: 10,
+                scale: 0.96,
+              }}
+              transition={{
+                type: 'spring',
+                bounce: 0.08,
+                duration: 0.03,
+              }}
+              onSubmit={addChild}
+            >
+              <div className="tree-prototype-editor-title">
+                <Plus
+                  size={12}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
+                ADD CHILD
+              </div>
+
+              <input
+                type="text"
+                value={
+                  addDraft.label
+                }
+                placeholder="New task or sub-goal"
+                onChange={(
+                  event,
+                ) =>
+                  setAddDraft(
+                    (draft) => ({
+                      ...draft,
+                      label:
+                        event.target
+                          .value,
+                    }),
+                  )
+                }
+                aria-label="New child title"
+              />
+
+              <textarea
+                value={
+                  addDraft.description
+                }
+                placeholder="Why this node matters"
+                onChange={(
+                  event,
+                ) =>
+                  setAddDraft(
+                    (draft) => ({
+                      ...draft,
+                      description:
+                        event.target
+                          .value,
+                    }),
+                  )
+                }
+                aria-label="New child description"
+              />
+
+              <div className="tree-prototype-add-row">
+                <select
+                  value={
+                    addDraft.type
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setAddDraft(
+                      (draft) => ({
+                        ...draft,
+                        type:
+                          event.target
+                            .value,
+                      }),
+                    )
+                  }
+                  aria-label="New child type"
+                >
+                  {TASK_NODE_TYPES.map(
+                    (type) => (
+                      <option
+                        key={
+                          type
+                        }
+                        value={
+                          type
+                        }
+                      >
+                        {type}
+                      </option>
+                    ),
+                  )}
+                </select>
+
+                <button type="submit" disabled={addBusy}>
+                  {addBusy ? '저장 중…' : 'ADD'}
+                </button>
+              </div>
+
               {addError && (
                 <div className="tree-prototype-add-error" role="alert">
                   {addError}
                 </div>
               )}
-            </div>
-          </motion.form>
-        )}
+            </motion.form>
+          )}
 
+          {/* RESOURCE LINK V1 — 파일 → Project 명시적 링크 (PART I).
+              사용자가 Project·relation을 직접 고른다. canonical write는
+              ProjectResources가 하고, 성공 시 snapshot 재조회로 UI 갱신. */}
+          {activePopover === 'link' && (
+            <motion.form
+              key="link-popover"
+              className="tree-prototype-popover tree-prototype-add-form"
+              initial={{
+                opacity: 0,
+                y: 12,
+                scale: 0.94,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                scale: 1,
+              }}
+              exit={{
+                opacity: 0,
+                y: 10,
+                scale: 0.96,
+              }}
+              transition={{
+                type: 'spring',
+                bounce: 0.08,
+                duration: 0.03,
+              }}
+              onSubmit={linkCurrentFile}
+            >
+              <div className="tree-prototype-editor-title">
+                <Link2
+                  size={12}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
+                LINK TO PROJECT
+              </div>
+
+              <div className="tree-prototype-link-file">
+                {linkDraft.fileId
+                  ? linkDraft.fileLabel || linkDraft.fileId
+                  : 'FILES 뷰에서 파일 행의 링크 버튼을 먼저 눌러주세요.'}
+              </div>
+
+              <select
+                value={linkDraft.targetType}
+                onChange={(event) =>
+                  setLinkDraft((draft) => ({
+                    ...draft,
+                    targetType: event.target.value,
+                    projectId: '',
+                    taskId: '',
+                  }))
+                }
+                aria-label="Link target type"
+              >
+                <option value="project">Project</option>
+                <option value="task">Task</option>
+              </select>
+
+              {linkDraft.targetType === 'task' ? (
+                <select
+                  value={linkDraft.taskId}
+                  onChange={(event) =>
+                    setLinkDraft((draft) => ({ ...draft, taskId: event.target.value }))
+                  }
+                  aria-label="Target task"
+                >
+                  <option value="">Task 선택…</option>
+                  {(taskTree.root.children || [])
+                    .filter((child) => child.type === 'project')
+                    .flatMap((project) => (project.children || [])
+                      .filter((child) => child.type === 'task')
+                      .map((task) => (
+                        <option key={task.id} value={task.id}>
+                          {project.label} · {task.label}
+                        </option>
+                      ))) }
+                </select>
+              ) : (
+                <select
+                  value={linkDraft.projectId}
+                  onChange={(event) =>
+                    setLinkDraft((draft) => ({ ...draft, projectId: event.target.value }))
+                  }
+                  aria-label="Target project"
+                >
+                  <option value="">프로젝트 선택…</option>
+                  {(taskTree.root.children || [])
+                    .filter((child) => child.type === 'project')
+                    .map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.label}
+                      </option>
+                    ))}
+                </select>
+              )}
+
+              <select
+                value={linkDraft.relation}
+                onChange={(event) =>
+                  setLinkDraft(
+                    (draft) => ({
+                      ...draft,
+                      relation: event.target.value,
+                    }),
+                  )
+                }
+                aria-label="Relation"
+              >
+                <option value="reference">reference — 참조</option>
+                <option value="source">source — 출처</option>
+                <option value="result">result — 결과물</option>
+                <option value="resource">resource — 자원</option>
+              </select>
+
+              <div className="tree-prototype-editor-actions">
+                <button
+                  type="submit"
+                  disabled={
+                    linkBusy ||
+                    !linkDraft.fileId ||
+                    (linkDraft.targetType === 'task'
+                      ? !linkDraft.taskId.trim()
+                      : !linkDraft.projectId.trim())
+                  }
+                >
+                  {linkBusy ? '연결 중…' : 'LINK'}
+                </button>
+              </div>
+
+              {linkError && (
+                <div className="tree-prototype-add-error" role="alert">
+                  {linkError}
+                </div>
+              )}
+            </motion.form>
+          )}
+
+          {/* PROJECT PRIMARY WORKSPACE V1 — Project → 논리 root 관계 설정.
+              기존 루트 선택(SET/CLEAR) + one-gesture Connect Folder(피커→register/reuse+set).
+              Connect는 files.roots에 없어도 동작한다 — Harness가 등록까지 겸한다. */}
+          {activePopover === 'workspace' && (
+            <motion.form
+              key="workspace-popover"
+              className="tree-prototype-popover tree-prototype-add-form"
+              initial={{
+                opacity: 0,
+                y: 12,
+                scale: 0.94,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                scale: 1,
+              }}
+              exit={{
+                opacity: 0,
+                y: 10,
+                scale: 0.96,
+              }}
+              transition={{
+                type: 'spring',
+                bounce: 0.08,
+                duration: 0.03,
+              }}
+              onSubmit={saveWorkspace}
+            >
+              <div className="tree-prototype-editor-title">
+                <MapIcon
+                  size={12}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
+                PRIMARY WORKSPACE
+              </div>
+
+              {node.type === 'project' ? (
+                <>
+                  <button
+                    type="button"
+                    className="tree-prototype-connect-folder"
+                    disabled={wsBusy}
+                    onClick={handleConnectFolder}
+                  >
+                    <FolderPlus size={12} strokeWidth={1.9} aria-hidden="true" />
+                    {wsBusy ? '처리 중…' : 'Connect Folder…'}
+                  </button>
+
+                  {files.roots.length > 0 && (
+                    <>
+                      <div className="tree-prototype-popover-divider" />
+                      <select
+                        value={wsDraft.rootId}
+                        onChange={(event) =>
+                          setWsDraft((draft) => ({
+                            ...draft,
+                            rootId: event.target.value,
+                          }))
+                        }
+                        aria-label="Primary workspace root"
+                      >
+                        <option value="">기존 루트 선택…</option>
+                        {files.roots.map((rootName) => (
+                          <option key={rootName} value={rootName}>
+                            {rootName}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="tree-prototype-editor-actions">
+                        <button type="submit" disabled={wsBusy || !wsDraft.rootId.trim()}>
+                          {wsBusy ? '처리 중…' : 'SET'}
+                        </button>
+                        <button type="button" disabled={wsBusy} onClick={clearWorkspace}>
+                          CLEAR
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {files.roots.length === 0 && (
+                    <div className="tree-prototype-connect-hint">
+                      아직 등록된 Workspace가 없습니다. Connect Folder로 추가하세요.
+                    </div>
+                  )}
+
+                  {!files.roots.length && (
+                    <div className="tree-prototype-editor-actions">
+                      <button type="button" disabled={wsBusy} onClick={clearWorkspace}>
+                        CLEAR
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="tree-prototype-connect-hint">Project 노드에서만 설정할 수 있습니다.</div>
+              )}
+
+              {wsError && (
+                <div className="tree-prototype-add-error" role="alert">
+                  {wsError}
+                </div>
+              )}
+            </motion.form>
+          )}
+        </AnimatePresence>
+      </nav>
+
+      <AnimatePresence>
         {dialog === 'delete' && (
           <motion.div
             className="tree-prototype-dialog-backdrop"

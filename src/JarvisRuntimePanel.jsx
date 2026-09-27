@@ -1,4 +1,9 @@
 import {
+  useEffect,
+  useState,
+} from 'react'
+
+import {
   RUNTIME_STATUS,
 } from './useJarvisRuntime'
 
@@ -25,6 +30,7 @@ const actionLabel = (toolName) => {
     create_task: 'Create task',
     update_task: 'Update task',
     delete_task: 'Delete task',
+    create_file: 'Create file',
   }
 
   return labels[toolName] || 'Requested action'
@@ -116,9 +122,9 @@ function LinkAffordance({ runtime, compact = false }) {
 export default function JarvisRuntimePanel({
   runtime,
   onApprove,
+  onApproveAndLink,
   onReject,
   onDismiss,
-  onReturnToMain,
   children,
   variant = 'full',
   pipMode = false,
@@ -132,6 +138,35 @@ export default function JarvisRuntimePanel({
     tracePath,
     scratch,
   } = runtime
+
+  /*
+    UX 통합 — '이 파일도 연결' 토글은 승인 대기 화면에서만 의미가 있다.
+    다른 상태로 전환되면(승인 실행, 거절, dismiss) 렌더 중 리셋 패턴으로
+    기본값(끔)에 되돌린다 — 다음 승인 화면은 항상 안전한 기본에서 시작한다.
+  */
+  const [linkWithApproval, setLinkWithApproval] = useState(false)
+  const [workspaceRoots, setWorkspaceRoots] = useState([])
+  const [prevStatus, setPrevStatus] = useState(status)
+
+  useEffect(() => {
+    if (status !== RUNTIME_STATUS.AWAITING_CONFIRMATION) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const response = await window.jarvisDiscovery?.listWorkspaceRoots?.()
+        if (!cancelled && response?.status === 'ok') setWorkspaceRoots(response.roots || [])
+      } catch {
+        if (!cancelled) setWorkspaceRoots([])
+      }
+    })()
+    return () => { cancelled = true }
+  }, [status])
+  if (prevStatus !== status) {
+    setPrevStatus(status)
+    if (status !== RUNTIME_STATUS.AWAITING_CONFIRMATION) {
+      setLinkWithApproval(false)
+    }
+  }
 
   if (status === RUNTIME_STATUS.IDLE) {
     return children
@@ -162,6 +197,31 @@ export default function JarvisRuntimePanel({
 
   if (status === RUNTIME_STATUS.AWAITING_CONFIRMATION) {
     const args = toolCall?.arguments || {}
+    /*
+      UX 통합 — 승인 한 번으로 생성+연결.
+      지금 요청이 create_task 제안이고 요청 당시 열어 본 파일(FileRef)이 있을
+      때만 체크박스를 보인다. 승인이 실제 생성으로 이어지면 approve가 끝난
+      직후 같은 canonical 경로로 파일이 연결되어 "승인 → 연결 카드 → Link
+      file"의 별도 단계가 사라진다. (스크린 시점엔 task가 아직 없으므로
+      linkAffordance가 아니라 submittedActiveFile을 본다.)
+    */
+    const canOfferLink =
+      typeof onApproveAndLink === 'function' &&
+      toolCall?.name === 'create_task' &&
+      Boolean(runtime.submittedActiveFile?.fileId)
+    const offerFileName =
+      runtime.submittedActiveFile?.name ||      runtime.submittedActiveFile?.path ||
+      ''
+    const approvedRoot = workspaceRoots.find((root) => root.id === args.root) ||
+      (workspaceRoots.length === 1 ? workspaceRoots[0] : null)
+    const rootLabel = approvedRoot?.display_name || args.root || runtime.submittedActiveFile?.rootId || ''
+    const destinationRelative = String(args.path || '').replace(/\\/g, '/')
+    const destinationParts = destinationRelative.split('/').filter(Boolean)
+    const destinationDirectory = destinationParts.slice(0, -1).join('/')
+    const destinationLabel = [rootLabel, destinationDirectory].filter(Boolean).join(' / ')
+    const absoluteDestination = approvedRoot?.device_path
+      ? `${approvedRoot.device_path.replace(/[\\/]+$/, '')}${destinationRelative ? `${approvedRoot.device_path.includes('\\') ? '\\' : '/'}${destinationRelative.split('/').join(approvedRoot.device_path.includes('\\') ? '\\' : '/')}` : ''}`
+      : ''
     return (
       <div className="jarvis-runtime-panel is-permission" role="alertdialog" aria-live="assertive">
         <div className="jarvis-runtime-heading">
@@ -184,6 +244,13 @@ export default function JarvisRuntimePanel({
             {args.title}
           </div>
         )}
+        {toolCall?.name === 'create_file' && (
+          <div className="jarvis-permission-file-destination" aria-label="File creation destination">
+            <strong>{destinationParts.at(-1) || args.path}</strong>
+            <span>위치 · {destinationLabel || destinationRelative}</span>
+            {absoluteDestination && <code title={absoluteDestination}>{absoluteDestination}</code>}
+          </div>
+        )}
 
         <div className="jarvis-permission-meta">
           {args.project_id && (
@@ -198,14 +265,27 @@ export default function JarvisRuntimePanel({
           Nothing has changed yet.
         </div>
 
+        {canOfferLink && (
+          <label className="jarvis-permission-link-option">
+            <input
+              type="checkbox"
+              checked={linkWithApproval}
+              onChange={(event) => setLinkWithApproval(event.target.checked)}
+            />
+            <span>
+              이 파일도 연결: {offerFileName}
+            </span>
+          </label>
+        )}
+
         <div className="jarvis-permission-actions">
           <button
             type="button"
             className="jarvis-approve-button"
-            onClick={onApprove}
+            onClick={linkWithApproval && canOfferLink ? onApproveAndLink : onApprove}
             disabled={status !== RUNTIME_STATUS.AWAITING_CONFIRMATION}
           >
-            Approve
+            {linkWithApproval && canOfferLink ? '승인하고 연결' : 'Approve'}
           </button>
           <button
             type="button"
@@ -231,6 +311,15 @@ export default function JarvisRuntimePanel({
       if (hideDone || !pipMode) {
         return children
       }
+      if (variant === 'quiet') {
+        return (
+          <div className="jarvis-runtime-panel is-done is-quiet pip-presence-resume" role="status" aria-live="polite">
+            <div className="jarvis-runtime-heading"><span className="jarvis-runtime-status-text">Done</span></div>
+            <div className="jarvis-runtime-quiet-note">{text ? `${text.length > 90 ? `${text.slice(0, 90)}…` : text}` : '요청을 처리했습니다.'}</div>
+            <div className="jarvis-runtime-quiet-hint">Core/Orb를 눌러 Main에서 전체 응답 보기</div>
+          </div>
+        )
+      }
 
       /*
         PiP done — 읽기 전용 알림이 아니라 곧바로 복귀하는 카드다.
@@ -240,19 +329,7 @@ export default function JarvisRuntimePanel({
         새 요소를 더하지 않는다 — 패널 자체가 복귀 행동이 된다.
       */
       return (
-        <div
-          className="jarvis-runtime-panel is-done is-quiet pip-presence-resume"
-          role="button"
-          tabIndex={0}
-          aria-label="Open JARVIS Assistant"
-          onClick={() => onReturnToMain?.()}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault()
-              onReturnToMain?.()
-            }
-          }}
-        >
+        <div className="jarvis-runtime-panel is-done is-quiet pip-presence-resume" role="status" aria-live="polite">
           <div className="jarvis-runtime-heading">
             <span className="jarvis-runtime-status-text">
               Done
@@ -267,14 +344,13 @@ export default function JarvisRuntimePanel({
           <div className="jarvis-runtime-quiet-note">
             {text
               ? `${text.length > 90 ? `${text.slice(0, 90)}…` : text}`
-              : '클릭하면 Assistant에서 전체 응답을 확인합니다.'}
+              : '클릭하면 Main에서 전체 응답을 확인합니다.'}
           </div>
 
           <div className="jarvis-runtime-quiet-hint">
-            클릭 — Assistant로 복귀
+            Core/Orb를 눌러 Main에서 전체 응답 보기
           </div>
 
-          <LinkAffordance runtime={runtime} compact />
         </div>
       )
     }
@@ -313,6 +389,18 @@ export default function JarvisRuntimePanel({
             Dismiss
           </button>
         </div>
+      </div>
+    )
+  }
+
+  // PiP errors stay informational; Main contains the full recovery details.
+  if (variant === 'quiet' && pipMode) {
+    const shortError = error ? `${String(error).slice(0, 96)}${String(error).length > 96 ? '…' : ''}` : '자세한 내용은 Main에서 확인하세요.'
+    return (
+      <div className="jarvis-runtime-panel is-error is-quiet pip-presence-error" role="status" aria-live="polite">
+        <div className="jarvis-runtime-heading"><span className="jarvis-runtime-status-text">오류</span></div>
+        <div className="jarvis-runtime-quiet-note">{shortError}</div>
+        <div className="jarvis-runtime-quiet-hint">Core/Orb를 눌러 Main에서 확인하세요</div>
       </div>
     )
   }

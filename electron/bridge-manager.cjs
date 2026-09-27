@@ -224,6 +224,25 @@ class BridgeManager {
     })
   }
 
+  /* FILE ACCESS 확장 — 디스크 읽기 + 새 파일 생성(승인 루트 한정) */
+
+  async diskList(path) {
+    return this._call({ type: 'disk_list', path })
+  }
+
+  async diskRead(path, maxChars) {
+    return this._call({ type: 'disk_read', path, max_chars: maxChars })
+  }
+
+  async fileCreate(rootId, relativePath, content) {
+    return this._call({
+      type: 'file_create',
+      root: rootId,
+      path: relativePath,
+      content,
+    })
+  }
+
   async linkProjectFile(projectId, fileId, relation) {
     return this._call({ type: 'link_project_file', project_id: projectId, file_id: fileId, relation })
   }

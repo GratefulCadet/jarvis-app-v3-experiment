@@ -7,7 +7,7 @@ const EDITABLE_EXTENSIONS = new Set([
 
 const extensionOf = (name) => name.split('.').pop()?.toLowerCase() || ''
 
-export default function FileEditor({ file, readFile, writeFile, onClose }) {
+export default function FileEditor({ file, readFile, writeFile, onClose, workspaceRoot, fileLocation }) {
   const [content, setContent] = useState('')
   const [revision, setRevision] = useState(null)
   const [state, setState] = useState('loading')
@@ -91,7 +91,13 @@ export default function FileEditor({ file, readFile, writeFile, onClose }) {
       <header className="workspace-file-editor-header">
         <div>
           <strong>{file.label}</strong>
-          <span>{file.path}</span>
+          <div className="workspace-file-editor-breadcrumb" aria-label="File location breadcrumb">
+            {(fileLocation?.breadcrumb || [workspaceRoot?.label, ...String(file.path || '').split('/')].filter(Boolean))
+              .map((part, index) => <span key={`${part}-${index}`}>{index > 0 ? '› ' : ''}{part}</span>)}
+          </div>
+          <span className="workspace-file-editor-path" title={fileLocation?.absolutePath || file.path}>
+            {fileLocation?.absolutePath || file.path}
+          </span>
         </div>
         <button type="button" onClick={handleClose} aria-label="Close file editor">×</button>
       </header>

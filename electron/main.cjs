@@ -17,6 +17,38 @@ let mainWindow = null
 let savedPipBounds = null
 let commandCenterBounds = null
 
+const clampPipBounds = (bounds, display) => {
+  const targetDisplay = display || screen.getDisplayMatching(bounds || mainWindow.getBounds())
+  const area = targetDisplay.workArea
+  const width = Math.min(PIP_SIZE.width, area.width)
+  const height = Math.min(PIP_SIZE.height, area.height)
+  return {
+    x: Math.min(Math.max(bounds.x, area.x), area.x + area.width - width),
+    y: Math.min(Math.max(bounds.y, area.y), area.y + area.height - height),
+    width,
+    height,
+  }
+}
+
+function handlePipDisplayMetricsChanged() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  validateSavedPipBounds()
+  if (mainWindow.getSize()[0] <= PIP_SIZE.width + 2) {
+    const clamped = clampPipBounds(mainWindow.getBounds())
+    mainWindow.setBounds(clamped, false)
+    savedPipBounds = { ...clamped }
+  }
+}
+
+function validateSavedPipBounds() {
+  const displays = screen.getAllDisplays()
+  if (!displays.length) return
+  const saved = savedPipBounds || mainWindow?.getBounds()
+  if (!saved) return
+  const display = screen.getDisplayMatching(saved)
+  savedPipBounds = clampPipBounds(saved, display)
+}
+
 function getWorkAreaBounds() {
   const currentBounds = mainWindow.getBounds()
 
@@ -49,8 +81,8 @@ function prepareCommandCenter() {
 
   const pipBounds = mainWindow.getBounds()
 
-  savedPipBounds = {
-    ...pipBounds,
+  if (mainWindow.getSize()[0] <= PIP_SIZE.width + 2) {
+    savedPipBounds = clampPipBounds(pipBounds)
   }
 
   commandCenterBounds =
@@ -137,13 +169,15 @@ function collapseToPip() {
   const currentBounds =
     mainWindow.getBounds()
 
-  const targetBounds =
+  const targetBounds = clampPipBounds(
     savedPipBounds ?? {
       x: currentBounds.x,
       y: currentBounds.y,
       width: PIP_SIZE.width,
       height: PIP_SIZE.height,
-    }
+    },
+  )
+  savedPipBounds = { ...targetBounds }
 
   mainWindow.setBackgroundColor(
     '#00000000',
@@ -239,6 +273,26 @@ function createWindow() {
       mainWindow.show()
     },
   )
+
+  let moveValidationTimer = null
+  mainWindow.on('moved', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    if (mainWindow.getSize()[0] > PIP_SIZE.width + 2) return
+    if (moveValidationTimer) clearTimeout(moveValidationTimer)
+    moveValidationTimer = setTimeout(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return
+      const clamped = clampPipBounds(mainWindow.getBounds())
+      const current = mainWindow.getBounds()
+      if (clamped.x !== current.x || clamped.y !== current.y) {
+        mainWindow.setBounds(clamped, false)
+      }
+      savedPipBounds = { ...clamped }
+    }, 80)
+  })
+
+  screen.on('display-metrics-changed', handlePipDisplayMetricsChanged)
+  screen.on('display-removed', handlePipDisplayMetricsChanged)
+
 }
 
 app.whenReady().then(() => {
@@ -315,3 +369,8 @@ registerTtsIpc({
   ipcMain,
   app,
 })
+
+/* Freebuff News — free public collectors + optional local Ollama evaluation. */
+const { createNewsService } = require('./news-service.cjs')
+
+createNewsService({ app, ipcMain })
