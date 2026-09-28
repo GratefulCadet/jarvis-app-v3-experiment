@@ -45,6 +45,13 @@ const RUNTIME_EVENT = Object.freeze({
   REJECT: 'reject',
   REJECT_RESOLVED: 'reject-resolved',
   ERROR: 'error',
+  /*
+    한도 중단 이어가기(resume). 사용자가 문장을 다시 치지 않고 그 지점에서
+    계속하게 한다. 재시도와 다른 점: 같은 요청을 새로 보내는 것이 아니라,
+    이미 오간 대화의 다음 턴부터 이어간다는 신호다.
+  */
+  RESUME: 'resume',
+  RESUME_RESOLVED: 'resume-resolved',
   DISMISS: 'dismiss',
   DISMISS_BRIEFING: 'dismiss-briefing',
   LINK_ACTIVE_FILE: 'link-active-file',
@@ -76,6 +83,14 @@ const createInitialRuntime = () => ({
   text: '',
   error: null,
   toolCall: null,
+  /*
+    tool_loop_limit으로 끊겼을 때 이어갈 수 있는지. Harness가 resume 가능 여부를
+    명시적으로 알려주므로 여기서 문장을 매칭하지 않는다 — 오류 문자열이 바뀌어도
+    버튼이 어긋나지 않게 하기 위해서다.
+  */
+  resumable: false,
+  resumesRemaining: 0,
+  resuming: false,
   projectId: DEFAULT_PROJECT,
   traceId: null,
   tracePath: null,
@@ -294,6 +309,11 @@ const runtimeReducer = (state, event) => {
         toolCall: null,
         traceId: null,
         tracePath: null,
+        // 새 요청은 이전에 남은 이어가기 상태를 물려받지 않는다. 한 작업의
+        // 이어가기 예산이 다른 작업으로 새어나가면 안 된다.
+        resumable: false,
+        resumesRemaining: 0,
+        resuming: false,
         // 새 요청이 시작되면 이전 턴의 링크 후보는 무효다.
         submittedActiveFile: (event.activeFile && event.activeFile.fileId)
           ? {
@@ -372,6 +392,10 @@ const runtimeReducer = (state, event) => {
         status: RUNTIME_STATUS.DONE,
         text: event.text || '',
         error: null,
+        // 정상 완주는 이어가기 지점을 지운다 — 남겨두면 죽은 버튼이 된다.
+        resumable: event.resumable === true,
+        resumesRemaining: event.resumesRemaining || 0,
+        resuming: false,
         traceId: event.traceId || null,
         tracePath: event.tracePath || null,
         scratch: Boolean(event.scratch),
@@ -479,6 +503,10 @@ const runtimeReducer = (state, event) => {
         status: RUNTIME_STATUS.DONE,
         text: event.text || '',
         error: null,
+        // 정상 완주는 이어가기 지점을 지운다 — 남겨두면 죽은 버튼이 된다.
+        resumable: event.resumable === true,
+        resumesRemaining: event.resumesRemaining || 0,
+        resuming: false,
         traceId: event.traceId || null,
         tracePath: event.tracePath || null,
         scratch: Boolean(event.scratch),
@@ -517,9 +545,50 @@ const runtimeReducer = (state, event) => {
 
     case RUNTIME_EVENT.ERROR:
       return pushTimeline(
-        { ...state, status: RUNTIME_STATUS.ERROR, error: event.error, toolCall: null },
+        {
+          ...state,
+          status: RUNTIME_STATUS.ERROR,
+          error: event.error,
+          toolCall: null,
+          // resume 가능 여부는 Harness 판정값을 그대로 따른다. 명시하지 않은
+          // 오류에는 버튼을 뜨지 않는다 — 이어갈 수 없는 지점에서 누르면
+          // "중단된 tool 루프가 없습니다"만 남는다.
+          resumable: event.resumable === true,
+          resumesRemaining: event.resumesRemaining || 0,
+          resuming: false,
+        },
         { kind: 'error', label: 'ERROR', detail: event.error },
       )
+
+    case RUNTIME_EVENT.RESUME:
+      return { ...state, status: RUNTIME_STATUS.THINKING, error: null, resuming: true }
+    case RUNTIME_EVENT.RESUME_RESOLVED: {
+      const base = {
+        ...state,
+        status: RUNTIME_STATUS.DONE,
+        text: event.text || '',
+        error: null,
+        toolCall: null,
+        timeline: state.timeline,
+        traceId: event.traceId ?? null,
+        tracePath: event.tracePath ?? null,
+        scratch: event.scratch ?? state.scratch,
+        // 이어가기가 끝났으면 지점도 사라진다 — 같은 지점을 두 번 이어갈 수 없다.
+        resumable: event.resumable === true,
+        resumesRemaining: event.resumesRemaining || 0,
+        resuming: false,
+      }
+      // 이어간 턴이 만든 편집 제안도 diff를 띄운다. 이 경로를 빼면 사용자는
+      // "제안을 만들었습니다"만 보고 승인할 방법이 사라진다 — 제안이 디스크에
+      // 있더라도 화면에 나타나지 않으므로 사실상 갇힌다.
+      const proposal = extractEditProposal(event.proposal, event.events)
+      if (proposal) {
+        base.editProposal = proposal
+        base.editStatus = 'proposed'
+        base.editError = null
+      }
+      return base
+    }
 
     case RUNTIME_EVENT.DISMISS:
       return {
@@ -528,6 +597,9 @@ const runtimeReducer = (state, event) => {
         text: '',
         error: null,
         toolCall: null,
+        resumable: false,
+        resumesRemaining: 0,
+        resuming: false,
         createdTask: null,
         // 사용자가 결과를 치웠으면 대기 중 요청도 함께 치운다.
         pendingSubmit: null,
@@ -670,7 +742,14 @@ export default function useJarvisRuntime() {
     const response = await api.chat(trimmed, projectId || DEFAULT_PROJECT, activeFile)
 
     if (!response || response.status === 'error') {
-      dispatch({ type: RUNTIME_EVENT.ERROR, error: (response && response.error) || '브리지 응답이 없습니다' })
+      // 한도 중단이면 이어가기 정보를 그대로 실어 보낸다. Harness가 판단했으므로
+      // renderer는 오류 문자열을 매칭하지 않는다.
+      dispatch({
+        type: RUNTIME_EVENT.ERROR,
+        error: (response && response.error) || '브리지 응답이 없습니다',
+        resumable: (response && response.resumable) === true,
+        resumesRemaining: (response && response.resumes_remaining) || 0,
+      })
       return
     }
     if (response.status === 'awaiting_confirmation') {
@@ -692,6 +771,9 @@ export default function useJarvisRuntime() {
         traceId: response.trace_id,
         tracePath: response.trace_path,
         scratch: response.scratch,
+        // 새 요청이 정상 끝났으므로 이전에 남은 이어가기 상태는 지운다.
+        resumable: false,
+        resumesRemaining: 0,
       })
       return
     }
@@ -772,6 +854,70 @@ export default function useJarvisRuntime() {
   const dismiss = useCallback(() => {
     approvalInFlightRef.current = false
     dispatch({ type: RUNTIME_EVENT.DISMISS })
+  }, [])
+
+  /*
+    한도 중단 지점을 이어간다.
+
+    문장을 다시 보내지 않는 것이 이 기능의 전부다. 같은 요청을 새로 보낸
+    resend와 헷갈리면 안 되므로, renderer는 아무 텍스트도 만들어 보내지 않고
+    "이어가라"는 신호만 보낸다. 실제 대화는 Harness가 가지고 있다.
+  */
+  const resumeRuntime = useCallback(async () => {
+    const api = getRuntimeApi()
+    const current = stateRef.current
+    if (
+      !api ||
+      typeof api.resume !== 'function' ||
+      !current.resumable ||
+      current.resuming
+    ) return
+
+    dispatch({ type: RUNTIME_EVENT.RESUME })
+    const response = await api.resume()
+
+    if (!response || response.status === 'error') {
+      dispatch({
+        type: RUNTIME_EVENT.ERROR,
+        error: (response && response.error) || '이어가기 실패',
+        // 이어가기가 실패하면 지점은 이미 소비되었을 수 있다 — Harness 판정값을
+        // 그대로 따른다. 여기서 임의로 true를 유지하면 죽은 버튼이 된다.
+        resumable: (response && response.resumable) === true,
+        resumesRemaining: (response && response.resumes_remaining) || 0,
+      })
+      return
+    }
+    if (response.status === 'awaiting_confirmation') {
+      dispatch({
+        type: RUNTIME_EVENT.PERMISSION_REQUIRED,
+        toolCall: response.tool_call,
+        events: response.events,
+        traceId: response.trace_id,
+        tracePath: response.trace_path,
+        scratch: response.scratch,
+      })
+      return
+    }
+    if (response.status === 'final') {
+      dispatch({
+        type: RUNTIME_EVENT.RESUME_RESOLVED,
+        proposal: response.proposal,
+        text: response.text,
+        events: response.events,
+        traceId: response.trace_id,
+        tracePath: response.trace_path,
+        scratch: response.scratch,
+        resumable: false,
+        resumesRemaining: 0,
+      })
+      return
+    }
+    dispatch({
+      type: RUNTIME_EVENT.ERROR,
+      error: `예상하지 못한 이어가기 응답: ${response.status}`,
+      resumable: false,
+      resumesRemaining: 0,
+    })
   }, [])
 
   const dismissBriefing = useCallback(() => {
@@ -1131,6 +1277,11 @@ export default function useJarvisRuntime() {
     approve,
     approveAndLinkFile,
     reject,
+    resumeRuntime,
+    // 한도 중단 이어가기 — Harness가 가능 여부를 판정한 결과만 노출한다.
+    resumable: state.resumable,
+    resumesRemaining: state.resumesRemaining,
+    resuming: state.resuming,
     dismiss,
     dismissBriefing,
     loadAutoBriefing,

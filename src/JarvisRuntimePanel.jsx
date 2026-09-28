@@ -276,6 +276,7 @@ export default function JarvisRuntimePanel({
   onApprove,
   onApproveAndLink,
   onReject,
+  onResume,
   onDismiss,
   children,
   variant = 'full',
@@ -289,6 +290,9 @@ export default function JarvisRuntimePanel({
     toolCall,
     tracePath,
     scratch,
+    resumable,
+    resumesRemaining,
+    resuming,
   } = runtime
 
   /*
@@ -593,7 +597,24 @@ export default function JarvisRuntimePanel({
         {error || '알 수 없는 오류'}
       </div>
 
+      {resumable && (
+        <div className="jarvis-runtime-resume-hint">
+          이어가면 문장을 다시 쓰지 않고 중단된 지점부터 계속합니다.
+          {resumesRemaining > 0 && ` (남은 ${resumesRemaining}회)`}
+        </div>
+      )}
+
       <div className="jarvis-runtime-footer">
+        {resumable && (
+          <button
+            type="button"
+            className="jarvis-mini-resume"
+            onClick={onResume}
+            disabled={resuming}
+          >
+            {resuming ? '이어가는 중…' : '이어가기'}
+          </button>
+        )}
         <button
           type="button"
           className="jarvis-mini-dismiss"

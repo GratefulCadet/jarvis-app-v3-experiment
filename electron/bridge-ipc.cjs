@@ -6,6 +6,7 @@
     jarvis:chat          → {text, projectId}
     jarvis:confirm       → {toolCall}   (제안된 call 그대로 — 인자 변경 불가)
     jarvis:reject        → {toolCall}   (0변이)
+    jarvis:resume        → (인자 없음)  한도 중단 지점 이어가기
     jarvis:bridge-status → {running, harnessHome, scratch}
 
   모든 응답은 Python bridge의 {type:'response', id, status, ...} 형태를 그대로
@@ -98,6 +99,10 @@ function registerBridgeIpc({ ipcMain, app }) {
       return { type: 'response', status: 'error', error: 'reject할 tool_call이 없습니다' }
     }
     return manager.reject(toolCall)
+  })
+
+  ipcMain.handle('jarvis:resume', async () => {
+    return manager.resume()
   })
 
   ipcMain.handle('jarvis:bridge-status', async () => {

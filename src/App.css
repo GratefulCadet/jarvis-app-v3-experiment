@@ -8930,6 +8930,40 @@
   outline-offset: 2px;
 }
 
+/* 한도 중단 이어가기 — 오류 화면에서 유일한 "다음 행동"이 된다. */
+.jarvis-runtime-resume-hint {
+  margin: 6px 0 2px;
+  color: var(--jarvis-text-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.jarvis-mini-resume {
+  border: 1px solid var(--jarvis-line);
+  background: transparent;
+  color: var(--jarvis-text);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 2px;
+}
+
+.jarvis-mini-resume:hover:not(:disabled) {
+  border-color: var(--jarvis-focus-ring);
+}
+
+.jarvis-mini-resume:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.jarvis-mini-resume:focus-visible {
+  outline: 1px solid var(--jarvis-focus-ring);
+  outline-offset: 2px;
+}
+
 /*
   Milestone B — "지금 보고 있는 파일을 방금 만든 작업에 연결" 제안.
 

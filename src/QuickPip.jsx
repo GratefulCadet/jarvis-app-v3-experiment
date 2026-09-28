@@ -92,6 +92,7 @@ export default function QuickPip({ executionContext, runtime, pipMode = false, o
           onApprove={runtime.approve}
           onApproveAndLink={runtime.approveAndLinkFile}
           onReject={runtime.reject}
+          onResume={runtime.resumeRuntime}
           onDismiss={runtime.dismiss}
           variant="quiet"
           pipMode

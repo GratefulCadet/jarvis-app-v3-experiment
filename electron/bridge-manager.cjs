@@ -159,6 +159,16 @@ class BridgeManager {
     return this._call({ type: 'reject', tool_call: toolCall })
   }
 
+  /*
+    tool_loop_limit으로 끊긴 작업을 이어간다. 문장을 다시 보내지 않는다 —
+    Harness가 한도 직전까지 실제로 오간 대화를 가지고 있고, 여기가 새로
+    만들어낼 것은 "계속해"라는 신호뿐이다. 사용자가 무엇을 다시 말한 것처럼
+    보이게 하지 않기 위해 텍스트를 싣지 않는다.
+  */
+  async resume() {
+    return this._call({ type: 'resume' })
+  }
+
   async ping() {
     return this._call({ type: 'ping' })
   }

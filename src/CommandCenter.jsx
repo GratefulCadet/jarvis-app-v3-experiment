@@ -661,6 +661,7 @@ export default function CommandCenter({
             onApprove={runtime.approve}
             onApproveAndLink={runtime.approveAndLinkFile}
             onReject={runtime.reject}
+            onResume={runtime.resumeRuntime}
             onDismiss={runtime.dismiss}
           >
             <div className="jarvis-runtime-placeholder">

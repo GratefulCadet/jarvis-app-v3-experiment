@@ -74,6 +74,12 @@ contextBridge.exposeInMainWorld(
       )
     },
 
+    // 한도 중단 지점을 이어간다. 인자가 없다 — 이어가기에 "계속해"를 새로
+    // 만들어 보내면 사용자가 말하지 않은 말이 대화 기록에 남는다.
+    resume: () => {
+      return ipcRenderer.invoke('jarvis:resume')
+    },
+
     bridgeStatus: () => {
       return ipcRenderer.invoke('jarvis:bridge-status')
     },
